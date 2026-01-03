@@ -50,6 +50,17 @@ const App: React.FC = () => {
 
   const deviceId = getDeviceId();
 
+  // Timeout de seguridad: Si en 4 segundos no hay respuesta de Firebase, pasamos a modo local
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (syncStatus === 'loading') {
+        console.warn("Firebase timeout: Switching to local mode");
+        setSyncStatus('local');
+      }
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [syncStatus]);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
@@ -71,7 +82,7 @@ const App: React.FC = () => {
         }
       }, (error) => {
         console.warn("Firebase Sync Error:", error.code);
-        if (error.code === 'permission-denied') {
+        if (error.code === 'permission-denied' || error.code === 'unavailable') {
           cloudDisabled.current = true;
           setSyncStatus('local');
         } else {
@@ -98,7 +109,7 @@ const App: React.FC = () => {
       await setDoc(doc(db, "users", deviceId), cleanData);
       setSyncStatus('synced');
     } catch (e: any) {
-      if (e.code === 'permission-denied') {
+      if (e.code === 'permission-denied' || e.code === 'unavailable') {
         cloudDisabled.current = true;
         setSyncStatus('local');
       } else {
