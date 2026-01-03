@@ -25,10 +25,13 @@ const INITIAL_STATE: AppState = {
 };
 
 const App: React.FC = () => {
-  // Carga inmediata desde local para evitar lag de red
   const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : INITIAL_STATE;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : INITIAL_STATE;
+    } catch (e) {
+      return INITIAL_STATE;
+    }
   });
   
   const [activeView, setActiveView] = useState<ViewType>('PLANNER');
@@ -40,48 +43,48 @@ const App: React.FC = () => {
     let id = localStorage.getItem('covey_device_id');
     if (!id) {
       id = 'user_' + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('cove_device_id', id);
+      localStorage.setItem('covey_device_id', id);
     }
     return id;
   }, []);
 
   const deviceId = getDeviceId();
 
-  // Guardar localmente siempre (Síncrono)
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
-  // Sincronización con Nube (Asíncrono)
   useEffect(() => {
     if (cloudDisabled.current) return;
 
-    const unsub = onSnapshot(doc(db, "users", deviceId), (docSnap) => {
-      if (docSnap.exists()) {
-        const cloudData = docSnap.data() as AppState;
-        // Evitar bucles infinitos comparando strings
-        if (JSON.stringify(cloudData) !== JSON.stringify(state)) {
-           setState(cloudData);
+    let unsub = () => {};
+    try {
+      unsub = onSnapshot(doc(db, "users", deviceId), (docSnap) => {
+        if (docSnap.exists()) {
+          const cloudData = docSnap.data() as AppState;
+          if (JSON.stringify(cloudData) !== JSON.stringify(state)) {
+             setState(cloudData);
+          }
+          setSyncStatus('synced');
+        } else {
+          saveToCloud(state);
         }
-        setSyncStatus('synced');
-      } else {
-        saveToCloud(state);
-      }
-    }, (error) => {
-      console.error("Firebase Connection Error:", error.code);
-      // Si no hay permisos, pasamos a modo local silencioso
-      if (error.code === 'permission-denied') {
-        cloudDisabled.current = true;
-        setSyncStatus('local');
-      } else {
-        setSyncStatus('error');
-      }
-    });
+      }, (error) => {
+        console.warn("Firebase Sync Error:", error.code);
+        if (error.code === 'permission-denied') {
+          cloudDisabled.current = true;
+          setSyncStatus('local');
+        } else {
+          setSyncStatus('error');
+        }
+      });
+    } catch (e) {
+      setSyncStatus('local');
+    }
 
     return () => unsub();
   }, [deviceId]);
 
-  // Función para limpiar datos antes de enviar a Firestore
   const sanitizeForFirestore = (obj: any): any => {
     return JSON.parse(JSON.stringify(obj, (key, value) => 
       value === undefined ? null : value
@@ -109,7 +112,6 @@ const App: React.FC = () => {
     saveToCloud(newState);
   };
 
-  // Handlers de UI
   const updateMission = (text: string) => {
     updateStateAndSync({ ...state, mission: { text, updatedAt: Date.now() } });
   };

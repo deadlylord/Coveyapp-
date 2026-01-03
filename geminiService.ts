@@ -1,9 +1,6 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { AppState, Task, Role } from "./types";
-
-// Fix: Strictly comply with API key usage guidelines
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+import { GoogleGenAI } from "@google/genai";
+import { AppState } from "./types";
 
 const SYSTEM_INSTRUCTION = `Actúa como un Coach de Productividad Senior experto en la metodología de Stephen Covey ("Los 7 hábitos de la gente altamente efectiva").
 Tu enfoque principal es ayudar al usuario a vivir en el CUADRANTE II (Importante pero NO Urgente).
@@ -16,7 +13,11 @@ Reglas de oro:
 5. Responde siempre en español de forma concisa y práctica.
 6. Si te preguntan cómo usar la app, explícales que deben empezar por su Misión, luego Roles, luego identificar Piedras Grandes y finalmente agendar la Arena.`;
 
+// Inicialización lazy para evitar que el ReferenceError de process.env bloquee la carga de la app
+const getAIInstance = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+
 export async function getCoachResponse(message: string, state: AppState) {
+  const ai = getAIInstance();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `
@@ -36,6 +37,7 @@ export async function getCoachResponse(message: string, state: AppState) {
 }
 
 export async function analyzeAlignment(state: AppState) {
+  const ai = getAIInstance();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Analiza esta lista de tareas y verifica si se alinean con la misión y los roles.
@@ -49,6 +51,7 @@ export async function analyzeAlignment(state: AppState) {
 }
 
 export async function optimizeWeek(state: AppState) {
+  const ai = getAIInstance();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Optimización de Semana: ${JSON.stringify(state.tasks)}. 
