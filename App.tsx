@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import Layout from './components/Layout';
 import CompassView from './components/CompassView';
 import PlannerView from './components/PlannerView';
@@ -8,7 +9,6 @@ import MethodologyView from './components/MethodologyView';
 import AICoachPanel from './components/AICoachPanel';
 import { AppState, ViewType, Task, Role, Quadrant, SyncStatus } from './types';
 import { db } from './firebase';
-import { doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const STORAGE_KEY = 'covey_compass_v5_local';
 
@@ -37,7 +37,7 @@ const App: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewType>('PLANNER');
   const [isCoachOpen, setIsCoachOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('loading');
-  const cloudDisabled = useRef(false);
+  const cloudDisabled = useRef(!db);
 
   const getDeviceId = useCallback(() => {
     let id = localStorage.getItem('covey_device_id');
@@ -50,14 +50,13 @@ const App: React.FC = () => {
 
   const deviceId = getDeviceId();
 
-  // Timeout de seguridad: Si en 4 segundos no hay respuesta de Firebase, pasamos a modo local
+  // Timeout de seguridad preventivo
   useEffect(() => {
     const timer = setTimeout(() => {
       if (syncStatus === 'loading') {
-        console.warn("Firebase timeout: Switching to local mode");
-        setSyncStatus('local');
+        setSyncStatus(db ? 'error' : 'local');
       }
-    }, 4000);
+    }, 3500);
     return () => clearTimeout(timer);
   }, [syncStatus]);
 
@@ -66,7 +65,10 @@ const App: React.FC = () => {
   }, [state]);
 
   useEffect(() => {
-    if (cloudDisabled.current) return;
+    if (cloudDisabled.current || !db) {
+        setSyncStatus('local');
+        return;
+    }
 
     let unsub = () => {};
     try {
@@ -81,13 +83,9 @@ const App: React.FC = () => {
           saveToCloud(state);
         }
       }, (error) => {
-        console.warn("Firebase Sync Error:", error.code);
-        if (error.code === 'permission-denied' || error.code === 'unavailable') {
-          cloudDisabled.current = true;
-          setSyncStatus('local');
-        } else {
-          setSyncStatus('error');
-        }
+        console.warn("Sync error:", error.code);
+        setSyncStatus('local');
+        cloudDisabled.current = true;
       });
     } catch (e) {
       setSyncStatus('local');
@@ -103,18 +101,13 @@ const App: React.FC = () => {
   };
 
   const saveToCloud = async (newState: AppState) => {
-    if (cloudDisabled.current) return;
+    if (cloudDisabled.current || !db) return;
     try {
       const cleanData = sanitizeForFirestore({ ...newState, lastSync: Date.now() });
       await setDoc(doc(db, "users", deviceId), cleanData);
       setSyncStatus('synced');
     } catch (e: any) {
-      if (e.code === 'permission-denied' || e.code === 'unavailable') {
-        cloudDisabled.current = true;
         setSyncStatus('local');
-      } else {
-        setSyncStatus('error');
-      }
     }
   };
 
@@ -179,8 +172,7 @@ const App: React.FC = () => {
   };
 
   const resetState = () => {
-    if (confirm("¿Limpiar todos los datos? Esta acción no se puede deshacer.")) {
-      cloudDisabled.current = false;
+    if (confirm("¿Limpiar todos los datos locales y de la nube?")) {
       updateStateAndSync(INITIAL_STATE);
     }
   };

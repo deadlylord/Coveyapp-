@@ -1,6 +1,6 @@
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDA_kEfOhg3uRWCqWjruIJl6Un7ghxL98E",
@@ -12,5 +12,13 @@ const firebaseConfig = {
   measurementId: "G-NJP6CN9B7L"
 };
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+let db: any;
+try {
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+} catch (e) {
+    console.error("Firebase init failed:", e);
+    db = null;
+}
+
+export { db };
