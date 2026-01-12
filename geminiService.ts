@@ -1,16 +1,77 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { AppState, Project } from "./types";
+import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
+import { AppState, Project, CoachMode, Task, Quadrant } from "./types";
 
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const SYSTEM_INSTRUCTION = `Eres un experto en Productividad y OKRs (Objectives and Key Results) con el estilo de Google y la filosofía de Stephen Covey. 
-Tu misión es transformar proyectos estratégicos en Objetivos ambiciosos y Resultados Clave (KRs) medibles.
+// Definición de Funciones para el Modelo
+const createTaskTool: FunctionDeclaration = {
+  name: 'crear_tarea',
+  parameters: {
+    type: Type.OBJECT,
+    description: 'Crea una nueva tarea en la agenda del usuario.',
+    properties: {
+      title: { type: Type.STRING, description: 'Título de la tarea' },
+      roleId: { type: Type.STRING, description: 'ID del rol asociado' },
+      quadrant: { type: Type.STRING, description: 'Cuadrante de Eisenhower: I, II, III o IV' },
+      day: { type: Type.NUMBER, description: 'Día de la semana (0=Lun, 6=Dom). null para Arena.' },
+      time: { type: Type.STRING, description: 'Hora en formato HH:MM opcional' }
+    },
+    required: ['title', 'roleId', 'quadrant'],
+  },
+};
 
-Reglas para los OKRs:
-1. El Objetivo (Objective) debe ser cualitativo, inspirador y agresivo.
-2. Los Resultados Clave (KRs) deben ser cuantificables, basados en resultados (no solo actividades) y llevar al cumplimiento del objetivo.
-3. Cada KR debe tener una 'Guía de Ejecución' que explique el 'cómo' táctico siguiendo el Cuadrante II de Covey.`;
+const createProjectTool: FunctionDeclaration = {
+  name: 'crear_proyecto',
+  parameters: {
+    type: Type.OBJECT,
+    description: 'Crea un nuevo proyecto estratégico con descripción.',
+    properties: {
+      title: { type: Type.STRING, description: 'Nombre del proyecto' },
+      description: { type: Type.STRING, description: 'Objetivo y alcance' },
+      roleId: { type: Type.STRING, description: 'ID del rol responsable' }
+    },
+    required: ['title', 'description', 'roleId'],
+  },
+};
+
+const getSystemInstruction = (mode: CoachMode) => {
+  const base = `Eres Core Assist (V6.5 NEURAL INTERFACE). Tu misión es optimizar la arquitectura de vida y negocio del usuario mediante principios de alto impacto.`;
+  
+  const modes: Record<CoachMode, string> = {
+    STRATEGIST: `${base} 
+      Modo: Estratega Core (Priorización Q2).
+      Enfoque: Gestión del tiempo estratégica, alineación de valores y ejecución impecable.`,
+    
+    BUSINESS_OWNER: `${base} 
+      Modo: Arquitecto de Negocios y ROI.
+      Enfoque: Maximizar el retorno de inversión del tiempo. Escalamiento, delegación técnica y libertad financiera.
+      Consejo: Sé extremadamente pragmático. Si una tarea no genera valor, sugiere eliminarla.`,
+    
+    ZEN_ENERGY: `${base} 
+      Modo: Bio-Hacker de Alto Rendimiento.
+      Enfoque: Gestión de la energía biológica sobre el tiempo. Foco cognitivo y vitalidad.`,
+    
+    SOCRATIC: `${base} 
+      Modo: Oráculo de Lógica Socrática.
+      Enfoque: Claridad radical a través de preguntas profundas. Eliminar el ruido mental.`,
+  };
+
+  const instructions = modes[mode] || modes.STRATEGIST;
+
+  return `${instructions}
+
+REGLA CRÍTICA DE FLUJO:
+1. SIEMPRE debes responder con texto primero. Explica tu razonamiento, da el consejo o responde la pregunta.
+2. Si el usuario te pide crear algo, o si consideras necesario crear una tarea/proyecto para su beneficio, utiliza las herramientas PROPORCIONADAS después de explicarlo en tu respuesta.
+3. NUNCA envíes una respuesta vacía o solo herramientas. El usuario necesita tu guía textual.
+4. Confirma en tu texto qué acciones has tomado (ej: "He agendado la tarea X en tu lista de hoy").
+
+REGLAS DE FORMATO:
+- Usa **negritas** para conceptos clave.
+- Usa listas con guiones para estructurar ideas.
+- Mantén un tono de alto nivel, profesional y motivador.`;
+};
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
   try {
@@ -30,15 +91,22 @@ export async function getCoachResponse(message: string, state: AppState) {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `Contexto: Misión ${state.mission.text}. Usuario: ${message}`,
-        config: { systemInstruction: SYSTEM_INSTRUCTION }
+        contents: `Usuario: "${message}". 
+Contexto Actual: 
+- Nombre: ${state.userName}
+- Roles: ${state.roles.map(r => `[ID:${r.id}] ${r.name}`).join(', ')}
+- Tareas esta semana: ${state.tasks.filter(t => t.weekOffset === 0).length}
+- Proyectos activos: ${state.projects.length}`,
+        config: { 
+          systemInstruction: getSystemInstruction(state.coachMode),
+          temperature: 0.7,
+          tools: [{ functionDeclarations: [createTaskTool, createProjectTool] }]
+        }
       });
-      return response.text;
+      return response;
     } catch (error: any) {
-      if (error.message?.includes("Requested entity was not found")) {
-        return "Error: Proyecto o API Key no encontrados. Por favor, reconecta tu clave API.";
-      }
-      return "Error de conexión con el Coach.";
+      console.error("Gemini Error:", error);
+      throw error;
     }
   });
 }
@@ -49,12 +117,9 @@ export async function improveProjectObjective(title: string, description: string
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `Título: ${title}. Descripción actual: "${description}". 
-        Actúa como un experto en OKRs de Google y Stephen Covey. 
-        Refina este Objetivo de Cuadrante II para que sea más inspirador, cualitativo y claro. 
-        Devuelve el resultado en formato JSON con los campos 'title' y 'description'.`,
+        contents: `Refina este Proyecto Estratégico para máxima claridad: Título: "${title}". Descripción: "${description}".`,
         config: { 
-            systemInstruction: SYSTEM_INSTRUCTION,
+            systemInstruction: getSystemInstruction('BUSINESS_OWNER'),
             responseMimeType: "application/json",
             responseSchema: {
                 type: Type.OBJECT,
@@ -68,7 +133,6 @@ export async function improveProjectObjective(title: string, description: string
       });
       return JSON.parse(response.text?.trim() || '{}');
     } catch (error) {
-      console.error("AI Project Improvement error:", error);
       return { title, description };
     }
   });
@@ -80,21 +144,17 @@ export async function breakdownProject(project: Project) {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `Actúa como un PM de Google. Define el OKR para este proyecto:
-          PROYECTO: ${project.title}
-          DESCRIPCIÓN: ${project.description}
-          
-          Genera 5 Resultados Clave (KRs) medibles. Cada KR debe ser una tarea de Cuadrante II que el usuario pueda agendar.`,
+        contents: `Desglosa este Proyecto en 5 OKRs: Proyecto: ${project.title}. Descripción: ${project.description}`,
         config: { 
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: getSystemInstruction('BUSINESS_OWNER'),
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.ARRAY,
             items: {
               type: Type.OBJECT,
               properties: {
-                title: { type: Type.STRING, description: "El Resultado Clave (KR) redactado de forma medible (ej: 'Lograr X para la fecha Y')" },
-                instruction: { type: Type.STRING, description: "Estrategia táctica de Cuadrante II para alcanzar este KR" }
+                title: { type: Type.STRING },
+                instruction: { type: Type.STRING }
               },
               required: ["title", "instruction"]
             }
@@ -103,42 +163,7 @@ export async function breakdownProject(project: Project) {
       });
       return JSON.parse(response.text?.trim() || '[]');
     } catch (error: any) {
-      console.error("Breakdown error:", error);
       throw error;
-    }
-  });
-}
-
-export async function analyzeAlignment(state: AppState) {
-  return withRetry(async () => {
-    try {
-      const ai = getAI();
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `Analiza la alineación de estas tareas con la misión y los roles usando mentalidad de OKRs: ${JSON.stringify(state.tasks)}`,
-        config: { systemInstruction: SYSTEM_INSTRUCTION }
-      });
-      return response.text;
-    } catch (error: any) {
-      console.error("Alignment analysis error:", error);
-      return "No pude analizar la alineación en este momento.";
-    }
-  });
-}
-
-export async function optimizeWeek(state: AppState) {
-  return withRetry(async () => {
-    try {
-      const ai = getAI();
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `Optimiza la agenda semanal priorizando los KRs de los proyectos activos: ${JSON.stringify(state.tasks)}`,
-        config: { systemInstruction: SYSTEM_INSTRUCTION }
-      });
-      return response.text;
-    } catch (error: any) {
-      console.error("Optimization error:", error);
-      return "No pude optimizar la agenda en este momento.";
     }
   });
 }

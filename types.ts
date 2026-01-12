@@ -19,7 +19,7 @@ export type Task = {
   roleId: string;
   projectId?: string;
   isBigRock: boolean;
-  day: number | null; // Cambiado a null para consistencia
+  day: number | null; 
   weekOffset: number; 
   quadrant: Quadrant;
   completed: boolean;
@@ -50,13 +50,25 @@ export type Mission = {
   updatedAt: number;
 };
 
+export type ChatMessage = {
+  role: 'coach' | 'user';
+  text: string;
+  timestamp: number;
+};
+
+export type CoachMode = 'STRATEGIST' | 'SOCRATIC' | 'BUSINESS_OWNER' | 'ZEN_ENERGY';
+
 export type AppState = {
+  userName: string;
+  coachMode: CoachMode;
   mission: Mission;
   roles: Role[];
   tasks: Task[];
   projects: Project[];
+  coachMessages: ChatMessage[];
+  version?: number;
 };
 
 export type ViewType = 'COMPASS' | 'PLANNER' | 'MATRIX' | 'COACH' | 'METHODOLOGY' | 'PROJECTS';
 
-export type SyncStatus = 'synced' | 'local' | 'loading' | 'error';
+export type SyncStatus = 'synced' | 'local' | 'loading' | 'error' | 'syncing';

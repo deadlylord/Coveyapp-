@@ -1,12 +1,12 @@
 
 {
-  "name": "Covey Compass",
-  "short_name": "Covey",
-  "description": "Productividad basada en roles y principios.",
+  "name": "Core Assist",
+  "short_name": "CoreAssist",
+  "description": "Asistente de productividad estratégica basado en principios de alto impacto.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F8FAF8",
-  "theme_color": "#4f46e5",
+  "theme_color": "#1A1C1E",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/3239/3239044.png",
