@@ -16,6 +16,9 @@ export type Task = {
   title: string;
   description?: string; 
   time?: string;
+  duration?: number;
+  timerStartedAt?: number | null;
+  timerElapsed?: number;
   roleId: string;
   projectId?: string;
   isBigRock: boolean;
@@ -30,6 +33,7 @@ export type ProjectStep = {
   id: string;
   text: string;
   instruction?: string;
+  estimatedTime?: string; 
   completed: boolean;
   taskId?: string; 
 };
@@ -42,6 +46,8 @@ export type Project = {
   targetSessions: number;
   completedSessions: number;
   steps: ProjectStep[];
+  estimatedTotalWeeks?: number; // Sugerencia de la IA
+  estimatedTotalHours?: string; // Sugerencia de la IA
   updatedAt: number;
 };
 
@@ -60,6 +66,7 @@ export type CoachMode = 'STRATEGIST' | 'SOCRATIC' | 'BUSINESS_OWNER' | 'ZEN_ENER
 
 export type AppState = {
   userName: string;
+  cloudId?: string;
   coachMode: CoachMode;
   mission: Mission;
   roles: Role[];

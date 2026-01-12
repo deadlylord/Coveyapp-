@@ -4,7 +4,6 @@ import { AppState, Project, CoachMode, Task, Quadrant } from "./types";
 
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// Definición de Funciones para el Modelo
 const createTaskTool: FunctionDeclaration = {
   name: 'crear_tarea',
   parameters: {
@@ -36,47 +35,23 @@ const createProjectTool: FunctionDeclaration = {
 };
 
 const getSystemInstruction = (mode: CoachMode) => {
-  const base = `Eres Core Assist (V6.5 NEURAL INTERFACE). Tu misión es optimizar la arquitectura de vida y negocio del usuario mediante principios de alto impacto.`;
-  
+  const base = `Eres Core Assist (V7.0 NEURAL ARCHITECT). Tu misión es optimizar la arquitectura de vida y negocio del usuario mediante principios de alto impacto.`;
   const modes: Record<CoachMode, string> = {
-    STRATEGIST: `${base} 
-      Modo: Estratega Core (Priorización Q2).
-      Enfoque: Gestión del tiempo estratégica, alineación de valores y ejecución impecable.`,
-    
-    BUSINESS_OWNER: `${base} 
-      Modo: Arquitecto de Negocios y ROI.
-      Enfoque: Maximizar el retorno de inversión del tiempo. Escalamiento, delegación técnica y libertad financiera.
-      Consejo: Sé extremadamente pragmático. Si una tarea no genera valor, sugiere eliminarla.`,
-    
-    ZEN_ENERGY: `${base} 
-      Modo: Bio-Hacker de Alto Rendimiento.
-      Enfoque: Gestión de la energía biológica sobre el tiempo. Foco cognitivo y vitalidad.`,
-    
-    SOCRATIC: `${base} 
-      Modo: Oráculo de Lógica Socrática.
-      Enfoque: Claridad radical a través de preguntas profundas. Eliminar el ruido mental.`,
+    STRATEGIST: `${base} Modo: Estratega Core. Prioriza Q2 y eficiencia operativa.`,
+    BUSINESS_OWNER: `${base} Modo: Arquitecto de Negocios. Enfócate en ROI, escalabilidad y delegación.`,
+    ZEN_ENERGY: `${base} Modo: Bio-Hacker. Prioriza la energía y el foco cognitivo.`,
+    SOCRATIC: `${base} Modo: Oráculo Socrático. Claridad mediante preguntas críticas.`,
   };
+  return `${modes[mode] || modes.STRATEGIST}
 
-  const instructions = modes[mode] || modes.STRATEGIST;
-
-  return `${instructions}
-
-REGLA CRÍTICA DE FLUJO:
-1. SIEMPRE debes responder con texto primero. Explica tu razonamiento, da el consejo o responde la pregunta.
-2. Si el usuario te pide crear algo, o si consideras necesario crear una tarea/proyecto para su beneficio, utiliza las herramientas PROPORCIONADAS después de explicarlo en tu respuesta.
-3. NUNCA envíes una respuesta vacía o solo herramientas. El usuario necesita tu guía textual.
-4. Confirma en tu texto qué acciones has tomado (ej: "He agendado la tarea X en tu lista de hoy").
-
-REGLAS DE FORMATO:
-- Usa **negritas** para conceptos clave.
-- Usa listas con guiones para estructurar ideas.
-- Mantén un tono de alto nivel, profesional y motivador.`;
+REGLAS DE CONTEXTO:
+- Tienes acceso al historial de logros del usuario.
+- Eres experto en estimación de proyectos. Analiza la complejidad y sugiere duración en SEMANAS.
+- Sé directo. Formato Markdown para textos descriptivos.`;
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
-  try {
-    return await fn();
-  } catch (error: any) {
+  try { return await fn(); } catch (error: any) {
     if (retries > 0 && (error.status >= 500 || error.status === 429)) {
       await new Promise(resolve => setTimeout(resolve, delay));
       return withRetry(fn, retries - 1, delay * 2);
@@ -86,55 +61,26 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Pr
 }
 
 export async function getCoachResponse(message: string, state: AppState) {
+  const completedTasks = state.tasks
+    .filter(t => t.completed)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 10)
+    .map(t => `- ${t.title}`)
+    .join('\n');
+
   return withRetry(async () => {
     try {
       const ai = getAI();
-      const response = await ai.models.generateContent({
+      return await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `Usuario: "${message}". 
-Contexto Actual: 
-- Nombre: ${state.userName}
-- Roles: ${state.roles.map(r => `[ID:${r.id}] ${r.name}`).join(', ')}
-- Tareas esta semana: ${state.tasks.filter(t => t.weekOffset === 0).length}
-- Proyectos activos: ${state.projects.length}`,
+        contents: `Usuario: "${message}". Contexto: Roles: ${state.roles.map(r => r.name).join(', ')}. Logros: ${completedTasks}`,
         config: { 
           systemInstruction: getSystemInstruction(state.coachMode),
           temperature: 0.7,
           tools: [{ functionDeclarations: [createTaskTool, createProjectTool] }]
         }
       });
-      return response;
-    } catch (error: any) {
-      console.error("Gemini Error:", error);
-      throw error;
-    }
-  });
-}
-
-export async function improveProjectObjective(title: string, description: string) {
-  return withRetry(async () => {
-    try {
-      const ai = getAI();
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `Refina este Proyecto Estratégico para máxima claridad: Título: "${title}". Descripción: "${description}".`,
-        config: { 
-            systemInstruction: getSystemInstruction('BUSINESS_OWNER'),
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING }
-                },
-                required: ["title", "description"]
-            }
-        }
-      });
-      return JSON.parse(response.text?.trim() || '{}');
-    } catch (error) {
-      return { title, description };
-    }
+    } catch (error: any) { throw error; }
   });
 }
 
@@ -144,26 +90,55 @@ export async function breakdownProject(project: Project) {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `Desglosa este Proyecto en 5 OKRs: Proyecto: ${project.title}. Descripción: ${project.description}`,
+        contents: `Analiza y desglosa: Proyecto: ${project.title}. Descripción: ${project.description}`,
         config: { 
           systemInstruction: getSystemInstruction('BUSINESS_OWNER'),
           responseMimeType: "application/json",
           responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                instruction: { type: Type.STRING }
-              },
-              required: ["title", "instruction"]
-            }
+            type: Type.OBJECT,
+            properties: {
+              estimatedTotalWeeks: { type: Type.INTEGER, description: "Número de semanas recomendadas para completar" },
+              estimatedTotalHours: { type: Type.STRING, description: "Esfuerzo total estimado (ej: 40h)" },
+              steps: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    instruction: { type: Type.STRING },
+                    estimatedTime: { type: Type.STRING }
+                  },
+                  required: ["title", "instruction", "estimatedTime"]
+                }
+              }
+            },
+            required: ["estimatedTotalWeeks", "estimatedTotalHours", "steps"]
           }
         }
       });
-      return JSON.parse(response.text?.trim() || '[]');
-    } catch (error: any) {
-      throw error;
-    }
+      return JSON.parse(response.text?.trim() || '{}');
+    } catch (error: any) { throw error; }
   });
+}
+
+export async function improveProjectObjective(title: string, description: string) {
+    return withRetry(async () => {
+      try {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+          model: 'gemini-3-pro-preview',
+          contents: `Optimiza: Título: "${title}". Descripción: "${description}".`,
+          config: { 
+              systemInstruction: getSystemInstruction('BUSINESS_OWNER'),
+              responseMimeType: "application/json",
+              responseSchema: {
+                  type: Type.OBJECT,
+                  properties: { title: { type: Type.STRING }, description: { type: Type.STRING } },
+                  required: ["title", "description"]
+              }
+          }
+        });
+        return JSON.parse(response.text?.trim() || '{}');
+      } catch (error) { return { title, description }; }
+    });
 }

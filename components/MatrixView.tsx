@@ -17,6 +17,7 @@ interface MatrixViewProps {
 const MatrixView: React.FC<MatrixViewProps> = ({ state, updateQuadrant, addTask, updateTask, toggleTask, moveTask, currentWeekOffset, setCurrentWeekOffset }) => {
   const [addingInQuadrant, setAddingInQuadrant] = useState<Quadrant | null>(null);
   const [newGoalTitle, setNewGoalTitle] = useState('');
+  const [newGoalTime, setNewGoalTime] = useState('');
   const [selectedAddRoleId, setSelectedAddRoleId] = useState(state.roles[0]?.id || '');
   
   const quadrants: Quadrant[] = ['I', 'II', 'III', 'IV'];
@@ -34,6 +35,7 @@ const MatrixView: React.FC<MatrixViewProps> = ({ state, updateQuadrant, addTask,
     addTask({
       id: "matrix_" + Date.now().toString(),
       title: newGoalTitle.trim(),
+      time: newGoalTime || undefined,
       roleId: selectedAddRoleId || state.roles[0]?.id || '1',
       isBigRock: addingInQuadrant === 'II', 
       weekOffset: currentWeekOffset,
@@ -43,6 +45,7 @@ const MatrixView: React.FC<MatrixViewProps> = ({ state, updateQuadrant, addTask,
       updatedAt: Date.now()
     });
     setNewGoalTitle('');
+    setNewGoalTime('');
     setAddingInQuadrant(null);
   };
 
@@ -85,13 +88,21 @@ const MatrixView: React.FC<MatrixViewProps> = ({ state, updateQuadrant, addTask,
 
             {addingInQuadrant === q && (
                 <form onSubmit={handleAddGoal} className="mb-6 space-y-3 animate-in slide-in-from-top-4 duration-300">
-                    <input 
-                        autoFocus
-                        value={newGoalTitle}
-                        onChange={e => setNewGoalTitle(e.target.value)}
-                        placeholder="Nueva meta de impacto..."
-                        className="w-full bg-black/40 border border-[#BC00FF]/30 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-[#BC00FF]"
-                    />
+                    <div className="flex gap-2">
+                        <input 
+                            value={newGoalTime}
+                            onChange={e => setNewGoalTime(e.target.value)}
+                            placeholder="Hora/Bloque"
+                            className="w-28 bg-black/40 border border-white/10 p-4 rounded-2xl text-[10px] font-black uppercase text-purple-400 outline-none"
+                        />
+                        <input 
+                            autoFocus
+                            value={newGoalTitle}
+                            onChange={e => setNewGoalTitle(e.target.value)}
+                            placeholder="Nueva meta de impacto..."
+                            className="flex-1 bg-black/40 border border-[#BC00FF]/30 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-[#BC00FF]"
+                        />
+                    </div>
                     <div className="flex gap-2">
                         <select 
                             value={selectedAddRoleId}
@@ -132,9 +143,9 @@ const MatrixView: React.FC<MatrixViewProps> = ({ state, updateQuadrant, addTask,
                                                 <span className="text-[10px]">{role?.icon}</span>
                                                 <span className="mono text-[7px] font-black uppercase text-slate-400 tracking-wider truncate max-w-[80px]">{role?.name}</span>
                                             </div>
-                                            {task.day !== null && (
+                                            {task.time && (
                                                 <span className="mono text-[7px] font-black uppercase text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/10">
-                                                    {DAYS_OF_WEEK[task.day]}
+                                                    {task.time}
                                                 </span>
                                             )}
                                         </div>

@@ -1,7 +1,49 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppState, Task } from '../types';
 import { DAYS_OF_WEEK } from '../constants';
+
+// Utilidad de Feedback Neural: Sonido Sintetizado y Vibración
+const NeuralFeedback = {
+  play: (type: 'pickup' | 'drop') => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      if (type === 'pickup') {
+        // Tono ascendente rápido (despegue)
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        if (navigator.vibrate) navigator.vibrate(10);
+      } else {
+        // Tono descendente (encaje)
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        if (navigator.vibrate) navigator.vibrate([15, 10, 15]);
+      }
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.1);
+      
+      // Cerrar contexto después de sonar para liberar recursos
+      setTimeout(() => ctx.close(), 200);
+    } catch (e) {
+      console.warn("Feedback audio no disponible");
+    }
+  }
+};
 
 interface PlannerViewProps {
   state: AppState;
@@ -18,7 +60,9 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskTime, setNewTaskTime] = useState('');
+  const [timeMode, setTimeMode] = useState<'CLOCK' | 'BLOCK'>('CLOCK');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [dragOverDay, setDragOverDay] = useState<number | 'arena' | null>(null);
 
   const getDayInfo = (dayIdx: number) => {
     const today = new Date();
@@ -40,6 +84,8 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
       id: "task_" + Date.now().toString(),
       title: newTaskTitle.trim(),
       time: newTaskTime || undefined,
+      duration: 30,
+      timerElapsed: 0,
       roleId: selectedAddRole,
       isBigRock: false,
       weekOffset: currentWeekOffset,
@@ -65,7 +111,26 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
     t.weekOffset === currentWeekOffset
   );
 
-  const activeRole = state.roles.find(r => r.id === selectedRoleId);
+  const handleDragOver = (e: React.DragEvent, target: number | 'arena') => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverDay !== target) {
+      setDragOverDay(target);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, target: number | 'arena') => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('text/plain');
+    setDragOverDay(null);
+    
+    if (taskId) {
+      const dayValue = target === 'arena' ? null : target;
+      moveTask(taskId, dayValue, currentWeekOffset);
+      // Feedback al soltar exitosamente
+      NeuralFeedback.play('drop');
+    }
+  };
 
   const handleRoleToggle = (roleId: string) => {
     if (selectedRoleId === roleId) setSelectedRoleId(null);
@@ -104,16 +169,43 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
           </button>
       </div>
 
-      {/* Input de Captura Rápida con Selector de Rol */}
       <div className="px-6">
         <div className="space-y-3">
-            <form onSubmit={handleAddSimpleTask} className="bg-[#131B2E] p-1.5 flex items-center shadow-2xl rounded-3xl border border-[#BC00FF]/20">
-                <input 
-                    type="time"
-                    value={newTaskTime}
-                    onChange={(e) => setNewTaskTime(e.target.value)}
-                    className="bg-black/40 text-purple-400 text-[10px] font-black p-3 rounded-2xl outline-none ml-2 border border-white/10 uppercase"
-                />
+            <form onSubmit={handleAddSimpleTask} className="bg-[#131B2E] p-1.5 flex items-center shadow-2xl rounded-3xl border border-[#BC00FF]/20 overflow-hidden">
+                <div className="flex bg-black/40 rounded-2xl ml-1 p-1">
+                  <button 
+                    type="button"
+                    onClick={() => setTimeMode('CLOCK')}
+                    className={`px-3 py-2 rounded-xl transition-all ${timeMode === 'CLOCK' ? 'bg-[#BC00FF] text-white shadow-lg' : 'text-slate-600'}`}
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setTimeMode('BLOCK')}
+                    className={`px-3 py-2 rounded-xl transition-all ${timeMode === 'BLOCK' ? 'bg-[#BC00FF] text-white shadow-lg' : 'text-slate-600'}`}
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M4 6h16M4 12h16m-7 6h7" /></svg>
+                  </button>
+                </div>
+
+                {timeMode === 'CLOCK' ? (
+                  <input 
+                      type="time"
+                      value={newTaskTime}
+                      onChange={(e) => setNewTaskTime(e.target.value)}
+                      className="w-24 bg-transparent text-purple-400 text-[10px] font-black p-3 outline-none border-none uppercase appearance-none"
+                  />
+                ) : (
+                  <input 
+                      type="text"
+                      value={newTaskTime}
+                      onChange={(e) => setNewTaskTime(e.target.value)}
+                      placeholder="BLOQUE"
+                      className="w-24 bg-transparent text-purple-400 text-[10px] font-black p-3 outline-none border-none uppercase placeholder:text-slate-700"
+                  />
+                )}
+
                 <input 
                     type="text" 
                     value={newTaskTitle}
@@ -147,13 +239,18 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
         </div>
       </div>
 
-      <section className="px-6 space-y-4">
-        <div className="flex items-center gap-3">
+      <section 
+        className={`mx-6 p-4 rounded-[32px] border-2 border-dashed transition-all duration-200 ${dragOverDay === 'arena' ? 'border-[#BC00FF] bg-[#BC00FF]/10 scale-[1.01] shadow-[0_0_30px_rgba(188,0,255,0.1)]' : 'border-white/5'}`}
+        onDragOver={(e) => handleDragOver(e, 'arena')}
+        onDragLeave={() => setDragOverDay(null)}
+        onDrop={(e) => handleDrop(e, 'arena')}
+      >
+        <div className="flex items-center gap-3 mb-4">
             <div className="w-1 h-5 rounded-full bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]"></div>
             <h2 className="text-xl font-black uppercase tracking-tighter italic text-amber-500/80">Arena Neural</h2>
         </div>
         {sandTasks.length === 0 ? (
-          <p className="text-[10px] mono text-slate-700 uppercase px-2 italic">Despejado</p>
+          <p className="text-[10px] mono text-slate-700 uppercase px-2 py-4 italic text-center">Contenedor Vacío</p>
         ) : (
           <div className="grid grid-cols-1 gap-3">
             {sandTasks.map(task => (
@@ -182,7 +279,13 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
           const dayTasks = tasksForDay(idx);
           
           return (
-            <div key={idx} className="space-y-4">
+            <div 
+                key={idx} 
+                className={`space-y-4 p-4 rounded-[32px] border-2 border-transparent transition-all duration-200 ${dragOverDay === idx ? 'border-[#BC00FF] bg-[#BC00FF]/10 scale-[1.01] shadow-[0_0_30px_rgba(188,0,255,0.1)]' : ''}`}
+                onDragOver={(e) => handleDragOver(e, idx)}
+                onDragLeave={() => setDragOverDay(null)}
+                onDrop={(e) => handleDrop(e, idx)}
+            >
                <div className="flex items-center gap-3">
                   <div className={`w-1 h-5 rounded-full ${isToday ? 'bg-[#BC00FF] shadow-[0_0_10px_#BC00FF]' : 'bg-slate-800'}`}></div>
                   <h2 className={`text-xl font-black uppercase tracking-tighter italic ${isToday ? 'text-white' : 'text-slate-500'}`}>{dayName}</h2>
@@ -217,18 +320,94 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
 
 const TaskCard = ({ task, roles, isHighlighted, isDimmed, isExpanded, onToggle, onExpand, onMove, onUpdate, onDelete }: any) => {
     const role = roles.find((r: any) => r.id === task.roleId);
+    const [timeLeft, setTimeLeft] = useState<number>(0);
+    const [isTimerRunning, setIsTimerRunning] = useState<boolean>(!!task.timerStartedAt);
+    const [editTimeMode, setEditTimeMode] = useState<'CLOCK' | 'BLOCK'>(task.time && /^\d{2}:\d{2}$/.test(task.time) ? 'CLOCK' : 'BLOCK');
+
+    useEffect(() => {
+        let interval: any;
+        const updateTimer = () => {
+            if (task.timerStartedAt) {
+                const elapsedSinceStart = Math.floor((Date.now() - task.timerStartedAt) / 1000);
+                const totalElapsed = (task.timerElapsed || 0) + elapsedSinceStart;
+                const totalSeconds = (task.duration || 0) * 60;
+                const remaining = Math.max(0, totalSeconds - totalElapsed);
+                setTimeLeft(remaining);
+                if (remaining <= 0) {
+                    setIsTimerRunning(false);
+                    clearInterval(interval);
+                }
+            } else {
+                const totalSeconds = (task.duration || 0) * 60;
+                setTimeLeft(Math.max(0, totalSeconds - (task.timerElapsed || 0)));
+            }
+        };
+        updateTimer();
+        if (task.timerStartedAt) { interval = setInterval(updateTimer, 1000); }
+        return () => clearInterval(interval);
+    }, [task.timerStartedAt, task.timerElapsed, task.duration]);
+
+    const handleTimerAction = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (task.timerStartedAt) {
+            const elapsedSinceStart = Math.floor((Date.now() - task.timerStartedAt) / 1000);
+            onUpdate({ timerStartedAt: null, timerElapsed: (task.timerElapsed || 0) + elapsedSinceStart });
+            setIsTimerRunning(false);
+        } else {
+            onUpdate({ timerStartedAt: Date.now() });
+            setIsTimerRunning(true);
+        }
+    };
+
+    const resetTimer = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onUpdate({ timerStartedAt: null, timerElapsed: 0 });
+        setIsTimerRunning(false);
+    };
+
+    const formatTimeLeft = (seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const handleDragStart = (e: React.DragEvent) => {
+        e.dataTransfer.setData('text/plain', task.id);
+        e.dataTransfer.effectAllowed = 'move';
+        const target = e.currentTarget as HTMLElement;
+        
+        // Feedback háptico y sónico al empezar a arrastrar
+        NeuralFeedback.play('pickup');
+
+        setTimeout(() => { 
+            target.style.transform = 'scale(0.75)';
+            target.style.opacity = '0.4';
+            target.style.filter = 'blur(1px)';
+        }, 0);
+    };
+
+    const handleDragEnd = (e: React.DragEvent) => {
+        const target = e.currentTarget as HTMLElement;
+        target.style.transform = 'scale(1)';
+        target.style.opacity = '1';
+        target.style.filter = 'none';
+    };
     
     return (
-        <div className={`bg-[#131B2E] rounded-[24px] overflow-hidden border transition-all duration-300 relative ${
-            isHighlighted && !isDimmed ? 'border-white/10 shadow-xl' : 'border-white/5'
-        } ${isDimmed ? 'opacity-20 desaturate-[0.8]' : 'opacity-100'} ${task.completed ? 'opacity-30' : ''}`}>
-            
-            {/* Indicador de Rol Lateral */}
-            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#BC00FF] opacity-30 shadow-[0_0_10px_#BC00FF]"></div>
+        <div 
+            draggable
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            className={`bg-[#131B2E] rounded-[24px] overflow-hidden border transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] relative cursor-grab active:cursor-grabbing ${
+                isHighlighted && !isDimmed ? 'border-white/10 shadow-xl' : 'border-white/5'
+            } ${isDimmed ? 'opacity-20 desaturate-[0.8]' : 'opacity-100'} ${task.completed ? 'opacity-30' : ''} ${isTimerRunning ? 'ring-2 ring-[#BC00FF]/50 shadow-[0_0_20px_rgba(188,0,255,0.2)]' : ''}`}
+        >
+            <div className={`absolute left-0 top-0 bottom-0 w-1.5 bg-[#BC00FF] ${isTimerRunning ? 'animate-pulse opacity-100 shadow-[0_0_15px_#BC00FF]' : 'opacity-30'}`}></div>
 
             <div className="p-4 flex items-center gap-4">
                 <button 
-                    onClick={onToggle}
+                    onClick={(e) => { e.stopPropagation(); onToggle(); }}
                     className={`shrink-0 w-7 h-7 rounded-xl border-2 flex items-center justify-center transition-all ${task.completed ? 'bg-[#BC00FF] border-[#BC00FF]' : 'border-white/10 hover:border-[#BC00FF]/50'}`}
                 >
                     {task.completed && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4"><path d="M5 13l4 4L19 7" /></svg>}
@@ -245,31 +424,75 @@ const TaskCard = ({ task, roles, isHighlighted, isDimmed, isExpanded, onToggle, 
                     <h4 className="font-bold text-sm text-slate-200 leading-snug">{task.title}</h4>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                    <select 
-                        value={task.day === null ? 'arena' : task.day}
-                        onChange={(e) => onMove(e.target.value === 'arena' ? null : parseInt(e.target.value))}
-                        className="bg-black/50 text-[8px] font-black uppercase text-slate-500 border border-white/5 rounded-lg px-2 py-2 outline-none appearance-none"
+                <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-right">
+                        <div className={`mono text-[10px] font-black ${timeLeft < 300 && timeLeft > 0 ? 'text-red-500 animate-pulse' : 'text-slate-400'}`}>
+                            {formatTimeLeft(timeLeft)}
+                        </div>
+                    </div>
+                    <button 
+                        onClick={handleTimerAction}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isTimerRunning ? 'bg-red-500/20 text-red-500 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/30'}`}
                     >
-                        <option value="arena">Arena</option>
-                        {DAYS_OF_WEEK.map((d, i) => <option key={i} value={i}>{d}</option>)}
-                    </select>
+                        {isTimerRunning ? (
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                        ) : (
+                            <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        )}
+                    </button>
                 </div>
             </div>
+
             {isExpanded && (
-                <div className="px-6 pb-6 space-y-4 animate-in slide-in-from-top-2 border-t border-white/5 pt-4">
-                    <div className="space-y-2">
-                        <label className="mono text-[7px] font-black uppercase text-purple-400 tracking-widest">Contexto Neural</label>
-                        <textarea 
-                            className="w-full bg-black/40 border border-white/5 p-4 rounded-2xl text-xs text-slate-300 min-h-[100px] outline-none focus:border-[#BC00FF]/30"
-                            placeholder="Añadir detalles críticos o contexto..."
-                            value={task.description || ''}
-                            onChange={(e) => onUpdate({ description: e.target.value })}
-                        />
+                <div className="px-6 pb-6 space-y-4 animate-in slide-in-from-top-2 border-t border-white/5 pt-4" onClick={(e) => e.stopPropagation()}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center mb-1">
+                              <label className="mono text-[7px] font-black uppercase text-purple-400 tracking-widest">Sincronía Temporal</label>
+                              <div className="flex gap-1 bg-black/40 p-0.5 rounded-lg border border-white/5">
+                                <button onClick={() => setEditTimeMode('CLOCK')} className={`px-2 py-0.5 rounded-md text-[6px] font-black uppercase transition-all ${editTimeMode === 'CLOCK' ? 'bg-[#BC00FF] text-white' : 'text-slate-600'}`}>Hora</button>
+                                <button onClick={() => setEditTimeMode('BLOCK')} className={`px-2 py-0.5 rounded-md text-[6px] font-black uppercase transition-all ${editTimeMode === 'BLOCK' ? 'bg-[#BC00FF] text-white' : 'text-slate-600'}`}>Bloque</button>
+                              </div>
+                            </div>
+                            {editTimeMode === 'CLOCK' ? (
+                              <input 
+                                  type="time"
+                                  className="w-full bg-black/40 border border-white/5 p-3 rounded-xl text-xs text-white outline-none focus:border-[#BC00FF]/30 appearance-none"
+                                  value={task.time || ''}
+                                  onChange={(e) => onUpdate({ time: e.target.value })}
+                              />
+                            ) : (
+                              <input 
+                                  type="text"
+                                  className="w-full bg-black/40 border border-white/5 p-3 rounded-xl text-xs text-white outline-none focus:border-[#BC00FF]/30"
+                                  placeholder="Ej: Enfoque, Mañana, Deep Work..."
+                                  value={task.time || ''}
+                                  onChange={(e) => onUpdate({ time: e.target.value })}
+                              />
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <label className="mono text-[7px] font-black uppercase text-purple-400 tracking-widest">Cronometría (minutos)</label>
+                            <div className="flex gap-2">
+                                <select 
+                                    className="flex-1 bg-black/40 border border-white/5 p-3 rounded-xl text-xs text-white outline-none"
+                                    value={task.duration || 30}
+                                    onChange={(e) => onUpdate({ duration: parseInt(e.target.value) })}
+                                >
+                                    <option value={15}>15m</option>
+                                    <option value={30}>30m</option>
+                                    <option value={45}>45m</option>
+                                    <option value={60}>1h</option>
+                                    <option value={90}>1.5h</option>
+                                    <option value={120}>2h</option>
+                                </select>
+                                <button onClick={resetTimer} className="px-3 bg-white/5 border border-white/5 rounded-xl text-[8px] font-black uppercase text-slate-500 hover:text-white transition-colors">Reset</button>
+                            </div>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="mono text-[7px] font-black uppercase text-slate-500 tracking-widest block mb-1.5">Impacto Q</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="mono text-[7px] font-black uppercase text-slate-500 tracking-widest">Impacto Eisenhower</label>
                             <select 
                                 className="w-full bg-black/40 border border-white/5 p-3 rounded-xl text-xs text-white outline-none"
                                 value={task.quadrant}
@@ -281,8 +504,8 @@ const TaskCard = ({ task, roles, isHighlighted, isDimmed, isExpanded, onToggle, 
                                 <option value="IV">Q4 Eliminar</option>
                             </select>
                         </div>
-                        <div>
-                            <label className="mono text-[7px] font-black uppercase text-slate-500 tracking-widest block mb-1.5">Reasignar Rol</label>
+                        <div className="space-y-2">
+                            <label className="mono text-[7px] font-black uppercase text-slate-500 tracking-widest">Esfera de Rol</label>
                             <select 
                                 className="w-full bg-black/40 border border-white/5 p-3 rounded-xl text-xs text-white outline-none"
                                 value={task.roleId}
@@ -292,8 +515,25 @@ const TaskCard = ({ task, roles, isHighlighted, isDimmed, isExpanded, onToggle, 
                             </select>
                         </div>
                     </div>
-                    <div className="pt-2 flex justify-end">
-                        <button onClick={onDelete} className="text-[9px] font-black uppercase text-red-500/50 hover:text-red-500 transition-colors">Eliminar Tarea</button>
+                    <div className="space-y-2">
+                        <label className="mono text-[7px] font-black uppercase text-purple-400 tracking-widest">Contexto Neural</label>
+                        <textarea 
+                            className="w-full bg-black/40 border border-white/5 p-4 rounded-2xl text-xs text-slate-300 min-h-[80px] outline-none focus:border-[#BC00FF]/30"
+                            placeholder="Detalles críticos..."
+                            value={task.description || ''}
+                            onChange={(e) => onUpdate({ description: e.target.value })}
+                        />
+                    </div>
+                    <div className="pt-2 flex justify-between items-center">
+                        <select 
+                            value={task.day === null ? 'arena' : task.day}
+                            onChange={(e) => onMove(e.target.value === 'arena' ? null : parseInt(e.target.value))}
+                            className="bg-black/40 text-[8px] font-black uppercase text-slate-500 border border-white/5 rounded-lg px-3 py-2 outline-none appearance-none"
+                        >
+                            <option value="arena">Mover a Arena</option>
+                            {DAYS_OF_WEEK.map((d, i) => <option key={i} value={i}>Mover a {d}</option>)}
+                        </select>
+                        <button onClick={onDelete} className="text-[9px] font-black uppercase text-red-500/50 hover:text-red-500 transition-colors">Purgar Tarea</button>
                     </div>
                 </div>
             )}
