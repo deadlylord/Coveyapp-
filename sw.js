@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'core-assist-v2';
+const CACHE_NAME = 'core-assist-v3'; // Incrementado para invalidar cachés viejos
 const ASSETS = [
   '/',
   '/index.html',
@@ -27,20 +27,24 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Estrategia Network-First para documentos HTML para evitar loop de updates, Cache-First para assets
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        if (networkResponse.ok && event.request.method === 'GET') {
-          const cacheCopy = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, cacheCopy);
-          });
+      return cachedResponse || fetch(event.request).then((networkResponse) => {
+        // Solo cacheamos respuestas válidas y seguras
+        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+            return networkResponse;
         }
+        // Opcional: Cache dinámico, pero cuidado con llenar el almacenamiento
         return networkResponse;
-      }).catch(() => {
-          // Si falla la red, ya devolvimos el cache arriba
       });
-      return cachedResponse || fetchPromise;
     })
   );
 });
