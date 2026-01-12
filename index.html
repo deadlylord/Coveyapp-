@@ -6,14 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Core Assist | Neural Interface</title>
     <meta name="theme-color" content="#0A0F1E">
-    <!-- Corregido: Etiqueta moderna para Web App -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/3239/3239044.png">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3239/3239044.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     
+    <script>
+      // Shim de compatibilidad para entornos de producción como Netlify
+      window.process = window.process || { env: {} };
+    </script>
+
     <style>
         :root {
             --bg-deep: #0A0F1E;
@@ -72,19 +77,17 @@
 <body class="min-h-screen">
     <div id="root"></div>
     
-    <!-- CRÍTICO: Esto faltaba. Sin esto, React no inicia -->
     <script type="module" src="/index.tsx"></script>
 
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then(registration => {
-              console.log('SW registered scope:', registration.scope);
+              console.log('Neural SW Active');
             })
             .catch(err => {
-              // Silenciosamente fallamos si sw.js no está disponible (común en ciertos deploys)
-              console.log('SW registration skipped (offline mode disabled):', err);
+              console.warn('Offline Sync disabled');
             });
         });
       }

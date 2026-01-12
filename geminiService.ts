@@ -2,7 +2,11 @@
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { AppState, Project, CoachMode, Task, Quadrant } from "./types";
 
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Inicialización resiliente
+const getAI = () => {
+  const apiKey = process.env.API_KEY;
+  return new GoogleGenAI({ apiKey });
+};
 
 const createTaskTool: FunctionDeclaration = {
   name: 'crear_tarea',
@@ -71,8 +75,9 @@ export async function getCoachResponse(message: string, state: AppState) {
   return withRetry(async () => {
     try {
       const ai = getAI();
+      // Cambiado a Flash para mayor velocidad y disponibilidad en web
       return await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: `Usuario: "${message}". Contexto: Roles: ${state.roles.map(r => r.name).join(', ')}. Logros: ${completedTasks}`,
         config: { 
           systemInstruction: getSystemInstruction(state.coachMode),
@@ -88,6 +93,7 @@ export async function breakdownProject(project: Project) {
   return withRetry(async () => {
     try {
       const ai = getAI();
+      // Mantenemos Pro para tareas de planificación compleja
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: `Analiza y desglosa: Proyecto: ${project.title}. Descripción: ${project.description}`,
@@ -126,7 +132,7 @@ export async function improveProjectObjective(title: string, description: string
       try {
         const ai = getAI();
         const response = await ai.models.generateContent({
-          model: 'gemini-3-pro-preview',
+          model: 'gemini-3-flash-preview',
           contents: `Optimiza: Título: "${title}". Descripción: "${description}".`,
           config: { 
               systemInstruction: getSystemInstruction('BUSINESS_OWNER'),
