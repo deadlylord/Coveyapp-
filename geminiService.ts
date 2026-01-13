@@ -4,7 +4,12 @@ import { AppState, Project, CoachMode, Task, Quadrant } from "./types";
 
 // Inicialización resiliente
 const getAI = () => {
+  // Aseguramos que process existe (shim en index.html) y accedemos a la key.
+  // Si en Netlify no se reemplaza process.env.API_KEY, esto será undefined.
   const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+      console.error("Gemini API Key missing. Ensure 'API_KEY' environment variable is set in Netlify.");
+  }
   return new GoogleGenAI({ apiKey });
 };
 
@@ -85,7 +90,12 @@ export async function getCoachResponse(message: string, state: AppState) {
           tools: [{ functionDeclarations: [createTaskTool, createProjectTool] }]
         }
       });
-    } catch (error: any) { throw error; }
+    } catch (error: any) { 
+        console.error("Coach Error:", error);
+        // Devolvemos un objeto respuesta "fake" para que la UI pueda mostrar el error amigablemente si es necesario,
+        // aunque el componente AICoachPanel ya captura errores.
+        throw new Error("Error de conexión con el Núcleo de IA. Verifica tu API Key o conexión.");
+    }
   });
 }
 
@@ -123,7 +133,10 @@ export async function breakdownProject(project: Project) {
         }
       });
       return JSON.parse(response.text?.trim() || '{}');
-    } catch (error: any) { throw error; }
+    } catch (error: any) { 
+        console.error("Project Breakdown Error:", error);
+        throw error;
+    }
   });
 }
 

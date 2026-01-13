@@ -34,26 +34,57 @@ const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('loading');
 
   useEffect(() => {
+    // Safety Timeout: Evita el "Blue Screen of Death" si Firebase es bloqueado por extensiones (ERR_BLOCKED_BY_CLIENT)
+    const safetyTimer = setTimeout(() => {
+        if (!isAppReady) {
+            console.warn("Firebase Init Timeout: Forzando carga de app en modo local (posible bloqueo de red).");
+            setIsAppReady(true);
+            setSyncStatus('error');
+        }
+    }, 3000);
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      clearTimeout(safetyTimer); // Cancelamos el timeout de seguridad si Firebase responde
+      
       if (currentUser) {
         setSyncStatus('loading');
-        const cloudData = await loadUserData(currentUser.uid);
-        if (cloudData) setState(cloudData as AppState);
-        else await saveUserData(currentUser.uid, INITIAL_STATE);
-        setUser(currentUser);
-        setSyncStatus('synced');
+        try {
+            const cloudData = await loadUserData(currentUser.uid);
+            if (cloudData) {
+                setState(cloudData as AppState);
+            } else {
+                // Si falla el guardado inicial (bloqueo), no importa, ya tenemos INITIAL_STATE
+                saveUserData(currentUser.uid, INITIAL_STATE).catch(e => console.warn("Save Init Failed:", e));
+            }
+            setUser(currentUser);
+            setSyncStatus('synced');
+        } catch (e) {
+            console.error("Error crítico cargando datos:", e);
+            setSyncStatus('error');
+            // Mantenemos el estado inicial en caso de error
+        }
       } else {
         setUser(null);
         setState(INITIAL_STATE);
         setSyncStatus('local');
       }
       setIsAppReady(true);
+    }, (error) => {
+        // En caso de que onAuthStateChanged falle directamente (raro, pero posible con bloqueos agresivos)
+        console.error("Auth Observer Error:", error);
+        clearTimeout(safetyTimer);
+        setIsAppReady(true);
+        setSyncStatus('error');
     });
-    return () => unsubscribe();
+
+    return () => {
+        unsubscribe();
+        clearTimeout(safetyTimer);
+    };
   }, []);
 
   useEffect(() => {
-    if (!user || syncStatus === 'loading') return;
+    if (!user || syncStatus === 'loading' || syncStatus === 'error') return;
     const timer = setTimeout(async () => {
       setSyncStatus('syncing');
       const success = await saveUserData(user.uid, state);
