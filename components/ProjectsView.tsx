@@ -65,7 +65,16 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
         estimatedTotalWeeks: result.estimatedTotalWeeks,
         estimatedTotalHours: result.estimatedTotalHours
       });
-    } catch (error: any) { alert("Error en el sistema neural."); } finally { setLoadingId(null); }
+    } catch (error: any) { 
+        const errorMsg = error.message || error.toString();
+        if (errorMsg === 'MISSING_API_KEY') {
+            alert("⚠️ IA Desconectada.\n\nPara usar las funciones de inteligencia neural, configura la variable API_KEY en Netlify.");
+        } else if (errorMsg.includes('not enabled') || errorMsg.includes('Generative Language API')) {
+            alert("⚠️ API No Habilitada.\n\nDebes habilitar la 'Generative Language API' en tu proyecto de Google Cloud Console.");
+        } else {
+            alert("Error en el sistema neural. Reintenta más tarde.");
+        }
+    } finally { setLoadingId(null); }
   };
 
   const confirmSchedule = (project: Project, step: ProjectStep) => {

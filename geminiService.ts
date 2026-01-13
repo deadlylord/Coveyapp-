@@ -5,10 +5,11 @@ import { AppState, Project, CoachMode, Task, Quadrant } from "./types";
 // Inicialización resiliente
 const getAI = () => {
   // Aseguramos que process existe (shim en index.html) y accedemos a la key.
-  // Si en Netlify no se reemplaza process.env.API_KEY, esto será undefined.
   const apiKey = process.env.API_KEY;
+  
   if (!apiKey) {
-      console.error("Gemini API Key missing. Ensure 'API_KEY' environment variable is set in Netlify.");
+      // Lanzamos un error específico para capturarlo en la UI
+      throw new Error("MISSING_API_KEY");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -61,6 +62,8 @@ REGLAS DE CONTEXTO:
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
   try { return await fn(); } catch (error: any) {
+    if (error.message === "MISSING_API_KEY") throw error; // No reintentar si falta la key
+    
     if (retries > 0 && (error.status >= 500 || error.status === 429)) {
       await new Promise(resolve => setTimeout(resolve, delay));
       return withRetry(fn, retries - 1, delay * 2);
@@ -91,10 +94,7 @@ export async function getCoachResponse(message: string, state: AppState) {
         }
       });
     } catch (error: any) { 
-        console.error("Coach Error:", error);
-        // Devolvemos un objeto respuesta "fake" para que la UI pueda mostrar el error amigablemente si es necesario,
-        // aunque el componente AICoachPanel ya captura errores.
-        throw new Error("Error de conexión con el Núcleo de IA. Verifica tu API Key o conexión.");
+        throw error;
     }
   });
 }
@@ -134,7 +134,6 @@ export async function breakdownProject(project: Project) {
       });
       return JSON.parse(response.text?.trim() || '{}');
     } catch (error: any) { 
-        console.error("Project Breakdown Error:", error);
         throw error;
     }
   });
