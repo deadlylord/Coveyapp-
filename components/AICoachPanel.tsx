@@ -126,12 +126,10 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
       
       const errorText = err.message || err.toString();
 
-      // Mensaje específico para falta de API Key
       if (errorText === 'MISSING_API_KEY' || errorText.includes('API Key')) {
-          errorMsg = `⚠️ **Enlace Neural Desconectado**\n\nNo se detectó la API Key de Gemini. Para activar la IA en Netlify:\n1. Ve a "Site settings"\n2. Busca "Environment variables"\n3. Añade una variable llamada \`API_KEY\` con tu llave de Google AI Studio.`;
+          errorMsg = `⚠️ **ERROR: LLAVE NO DETECTADA**\n\nHas añadido la variable en Netlify, pero el sistema aún no la ha "visto".\n\n**SOLUCIÓN:**\n1. Ve a tu panel de **Netlify**.\n2. Ve a la pestaña **Deploys**.\n3. Haz clic en el botón **"Trigger deploy"**.\n4. Selecciona **"Clear cache and deploy site"**.\n\nEsto forzará a la aplicación a leer la nueva variable \`API_KEY\`.`;
       } else if (errorText.includes('not enabled') || errorText.includes('Generative Language API')) {
-          // Error específico: API Key existe, pero el servicio no está habilitado en GCP
-          errorMsg = `⚠️ **Servicio Inactivo**\n\nLa API de Gemini no está habilitada en tu proyecto de Google Cloud.\n1. Ve a console.cloud.google.com\n2. Selecciona tu proyecto.\n3. Busca "Generative Language API" en la biblioteca y dale a **Enable**.`;
+          errorMsg = `⚠️ **API NO HABILITADA**\n\nTu llave es válida, pero el servicio está apagado.\n\n1. Ve a **console.cloud.google.com**.\n2. Asegúrate de que el **Project ID** arriba sea el mismo de tu llave.\n3. Busca **"Generative Language API"** y haz clic en **HABILITAR**.`;
       }
       
       onAddMessage({ role: 'coach', text: errorMsg, timestamp: Date.now() });

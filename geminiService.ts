@@ -4,11 +4,10 @@ import { AppState, Project, CoachMode, Task, Quadrant } from "./types";
 
 // Inicialización resiliente
 const getAI = () => {
-  // Aseguramos que process existe (shim en index.html) y accedemos a la key.
   const apiKey = process.env.API_KEY;
   
-  if (!apiKey) {
-      // Lanzamos un error específico para capturarlo en la UI
+  if (!apiKey || apiKey === "undefined") {
+      console.error("CRITICAL: process.env.API_KEY is missing from environment.");
       throw new Error("MISSING_API_KEY");
   }
   return new GoogleGenAI({ apiKey });
@@ -62,7 +61,7 @@ REGLAS DE CONTEXTO:
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
   try { return await fn(); } catch (error: any) {
-    if (error.message === "MISSING_API_KEY") throw error; // No reintentar si falta la key
+    if (error.message === "MISSING_API_KEY") throw error;
     
     if (retries > 0 && (error.status >= 500 || error.status === 429)) {
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -83,7 +82,6 @@ export async function getCoachResponse(message: string, state: AppState) {
   return withRetry(async () => {
     try {
       const ai = getAI();
-      // Cambiado a Flash para mayor velocidad y disponibilidad en web
       return await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Usuario: "${message}". Contexto: Roles: ${state.roles.map(r => r.name).join(', ')}. Logros: ${completedTasks}`,
@@ -103,7 +101,6 @@ export async function breakdownProject(project: Project) {
   return withRetry(async () => {
     try {
       const ai = getAI();
-      // Mantenemos Pro para tareas de planificación compleja
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: `Analiza y desglosa: Proyecto: ${project.title}. Descripción: ${project.description}`,

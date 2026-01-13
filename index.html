@@ -15,8 +15,9 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     
     <script>
-      // Shim de compatibilidad para entornos de producción como Netlify
-      window.process = window.process || { env: {} };
+      // Shim de compatibilidad mejorado para Netlify/Vite/Esbuild
+      window.process = window.process || {};
+      window.process.env = window.process.env || {};
     </script>
 
     <style>
