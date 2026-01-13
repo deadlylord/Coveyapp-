@@ -2,15 +2,26 @@
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { AppState, Project, CoachMode, Task, Quadrant } from "./types";
 
-// Inicialización resiliente
 const getAI = () => {
   const apiKey = process.env.API_KEY;
-  
   if (!apiKey || apiKey === "undefined") {
-      console.error("CRITICAL: process.env.API_KEY is missing from environment.");
       throw new Error("MISSING_API_KEY");
   }
   return new GoogleGenAI({ apiKey });
+};
+
+// Utilidad para extraer JSON robusto de la respuesta
+const extractJSON = (text: string) => {
+    try {
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start === -1 || end === -1) return JSON.parse(text);
+        const jsonStr = text.substring(start, end + 1);
+        return JSON.parse(jsonStr);
+    } catch (e) {
+        console.error("Failed to parse JSON from AI response:", text);
+        throw new Error("INVALID_AI_RESPONSE");
+    }
 };
 
 const createTaskTool: FunctionDeclaration = {
@@ -44,7 +55,7 @@ const createProjectTool: FunctionDeclaration = {
 };
 
 const getSystemInstruction = (mode: CoachMode) => {
-  const base = `Eres Core Assist (V7.0 NEURAL ARCHITECT). Tu misión es optimizar la arquitectura de vida y negocio del usuario mediante principios de alto impacto.`;
+  const base = `Eres Core Assist (V8.0 NEURAL ARCHITECT). Tu misión es optimizar la arquitectura de vida y negocio del usuario mediante principios de alto impacto (80/20).`;
   const modes: Record<CoachMode, string> = {
     STRATEGIST: `${base} Modo: Estratega Core. Prioriza Q2 y eficiencia operativa.`,
     BUSINESS_OWNER: `${base} Modo: Arquitecto de Negocios. Enfócate en ROI, escalabilidad y delegación.`,
@@ -61,8 +72,6 @@ REGLAS DE CONTEXTO:
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
   try { return await fn(); } catch (error: any) {
-    if (error.message === "MISSING_API_KEY") throw error;
-    
     if (retries > 0 && (error.status >= 500 || error.status === 429)) {
       await new Promise(resolve => setTimeout(resolve, delay));
       return withRetry(fn, retries - 1, delay * 2);
@@ -84,16 +93,14 @@ export async function getCoachResponse(message: string, state: AppState) {
       const ai = getAI();
       return await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Usuario: "${message}". Contexto: Roles: ${state.roles.map(r => r.name).join(', ')}. Logros: ${completedTasks}`,
+        contents: [{ parts: [{ text: `Usuario: "${message}". Contexto: Roles: ${state.roles.map(r => r.name).join(', ')}. Logros: ${completedTasks}` }] }],
         config: { 
           systemInstruction: getSystemInstruction(state.coachMode),
           temperature: 0.7,
           tools: [{ functionDeclarations: [createTaskTool, createProjectTool] }]
         }
       });
-    } catch (error: any) { 
-        throw error;
-    }
+    } catch (error: any) { throw error; }
   });
 }
 
@@ -103,7 +110,7 @@ export async function breakdownProject(project: Project) {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `Analiza y desglosa: Proyecto: ${project.title}. Descripción: ${project.description}`,
+        contents: [{ parts: [{ text: `Analiza y desglosa: Proyecto: ${project.title}. Descripción: ${project.description}` }] }],
         config: { 
           systemInstruction: getSystemInstruction('BUSINESS_OWNER'),
           responseMimeType: "application/json",
@@ -129,31 +136,35 @@ export async function breakdownProject(project: Project) {
           }
         }
       });
-      return JSON.parse(response.text?.trim() || '{}');
-    } catch (error: any) { 
-        throw error;
-    }
+      return extractJSON(response.text || '{}');
+    } catch (error: any) { throw error; }
   });
 }
 
-export async function improveProjectObjective(title: string, description: string) {
+export async function improveProjectObjective(title: string, description: string, roleName: string) {
     return withRetry(async () => {
       try {
         const ai = getAI();
         const response = await ai.models.generateContent({
           model: 'gemini-3-flash-preview',
-          contents: `Optimiza: Título: "${title}". Descripción: "${description}".`,
+          contents: [{ parts: [{ text: `Optimiza este objetivo de proyecto específicamente para el contexto del rol: "${roleName}". Convierte el título en algo potente y corto, y la descripción en una definición de impacto SMART. Título actual: "${title}". Descripción: "${description}".` }] }],
           config: { 
-              systemInstruction: getSystemInstruction('BUSINESS_OWNER'),
+              systemInstruction: `Eres un estratega experto. Tu misión es refinar objetivos para que sean de alto impacto según la esfera de responsabilidad indicada: ${roleName}.`,
               responseMimeType: "application/json",
               responseSchema: {
                   type: Type.OBJECT,
-                  properties: { title: { type: Type.STRING }, description: { type: Type.STRING } },
+                  properties: { 
+                      title: { type: Type.STRING, description: "Título optimizado" }, 
+                      description: { type: Type.STRING, description: "Descripción optimizada enfocada en impacto" } 
+                  },
                   required: ["title", "description"]
               }
           }
         });
-        return JSON.parse(response.text?.trim() || '{}');
-      } catch (error) { return { title, description }; }
+        return extractJSON(response.text || '{}');
+      } catch (error) { 
+          console.error("Error in improveProjectObjective:", error);
+          return { title, description }; 
+      }
     });
 }

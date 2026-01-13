@@ -27,8 +27,8 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
   state, 
   updateMode, 
   onAddTask, 
-  onAddProject, 
-  onAddMessage, 
+  onAddProject,
+  onAddMessage,
   onClearMessages 
 }) => {
   const [input, setInput] = useState('');
@@ -120,19 +120,8 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
       const coachText = response.text || (actionsTaken > 0 ? "He ejecutado las acciones solicitadas en tu sistema Core. ⚡" : "Entendido. Procesando... 💠");
       onAddMessage({ role: 'coach', text: coachText, timestamp: Date.now() });
       
-    } catch (err: any) {
-      console.warn("Coach interaction failed", err);
-      let errorMsg = 'Sincronización interrumpida. Verifica tu conexión.';
-      
-      const errorText = err.message || err.toString();
-
-      if (errorText === 'MISSING_API_KEY' || errorText.includes('API Key')) {
-          errorMsg = `⚠️ **ERROR: LLAVE NO DETECTADA**\n\nHas añadido la variable en Netlify, pero el sistema aún no la ha "visto".\n\n**SOLUCIÓN:**\n1. Ve a tu panel de **Netlify**.\n2. Ve a la pestaña **Deploys**.\n3. Haz clic en el botón **"Trigger deploy"**.\n4. Selecciona **"Clear cache and deploy site"**.\n\nEsto forzará a la aplicación a leer la nueva variable \`API_KEY\`.`;
-      } else if (errorText.includes('not enabled') || errorText.includes('Generative Language API')) {
-          errorMsg = `⚠️ **API NO HABILITADA**\n\nTu llave es válida, pero el servicio está apagado.\n\n1. Ve a **console.cloud.google.com**.\n2. Asegúrate de que el **Project ID** arriba sea el mismo de tu llave.\n3. Busca **"Generative Language API"** y haz clic en **HABILITAR**.`;
-      }
-      
-      onAddMessage({ role: 'coach', text: errorMsg, timestamp: Date.now() });
+    } catch (err) {
+      onAddMessage({ role: 'coach', text: 'Sincronización interrumpida. Verifica tu conexión neural.', timestamp: Date.now() });
     } finally {
       setLoading(false);
     }

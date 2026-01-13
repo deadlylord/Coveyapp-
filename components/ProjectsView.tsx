@@ -18,7 +18,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [improvingProject, setImprovingProject] = useState(false);
   const [schedulingStep, setSchedulingStep] = useState<{ projectId: string, stepId: string } | null>(null);
-  const [editingStep, setEditingStep] = useState<{ projectId: string, stepId: string } | null>(null);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   
   const [scheduleConfig, setScheduleConfig] = useState<{ weekOffset: number, day: string }>({ weekOffset: 0, day: 'arena' });
@@ -42,11 +41,33 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
     setFormData({ title: '', description: '', roleId: state.roles[0]?.id || '' });
   };
 
-  const handleUpdateStep = (projectId: string, stepId: string, updates: Partial<ProjectStep>) => {
-    const project = state.projects.find(p => p.id === projectId);
-    if (!project) return;
-    const newSteps = project.steps.map(s => s.id === stepId ? { ...s, ...updates } : s);
-    updateProject(projectId, { steps: newSteps });
+  const handleImprove = async (isNew: boolean, projectId?: string) => {
+    const currentProj = isNew ? null : state.projects.find(p => p.id === projectId);
+    const currentTitle = isNew ? formData.title : currentProj?.title;
+    const currentDesc = isNew ? formData.description : currentProj?.description;
+    const currentRoleId = isNew ? formData.roleId : currentProj?.roleId;
+
+    const role = state.roles.find(r => r.id === currentRoleId);
+    const roleName = role?.name || "General";
+
+    if (!currentTitle?.trim()) {
+        alert("Introduce un título básico primero.");
+        return;
+    }
+
+    setImprovingProject(true);
+    try {
+      const improved = await improveProjectObjective(currentTitle, currentDesc || '', roleName);
+      if (isNew) {
+        setFormData(prev => ({ ...prev, title: improved.title, description: improved.description }));
+      } else if (projectId) {
+        updateProject(projectId, { title: improved.title, description: improved.description });
+      }
+    } catch (error) {
+      console.error("Neural Error:", error);
+    } finally {
+      setImprovingProject(false);
+    }
   };
 
   const handleBreakdown = async (project: Project) => {
@@ -65,16 +86,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
         estimatedTotalWeeks: result.estimatedTotalWeeks,
         estimatedTotalHours: result.estimatedTotalHours
       });
-    } catch (error: any) { 
-        const errorMsg = error.message || error.toString();
-        if (errorMsg === 'MISSING_API_KEY') {
-            alert("⚠️ IA Desconectada.\n\nPara usar las funciones de inteligencia neural, configura la variable API_KEY en Netlify.");
-        } else if (errorMsg.includes('not enabled') || errorMsg.includes('Generative Language API')) {
-            alert("⚠️ API No Habilitada.\n\nDebes habilitar la 'Generative Language API' en tu proyecto de Google Cloud Console.");
-        } else {
-            alert("Error en el sistema neural. Reintenta más tarde.");
-        }
-    } finally { setLoadingId(null); }
+    } catch (error: any) { alert("Error en el sistema neural."); } finally { setLoadingId(null); }
   };
 
   const confirmSchedule = (project: Project, step: ProjectStep) => {
@@ -122,16 +134,44 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
       </div>
 
       {isAdding && (
-        <div className="bg-[#131B2E] p-8 rounded-[32px] border border-white/10 shadow-2xl animate-in zoom-in-95 space-y-6">
-          <input 
-            placeholder="Título del Proyecto..." 
-            className="w-full bg-transparent text-2xl font-black outline-none border-b border-white/10 pb-4 focus:border-[#BC00FF] text-white uppercase italic"
-            value={formData.title}
-            onChange={e => setFormData({...formData, title: e.target.value})}
-          />
+        <div className="bg-[#131B2E] p-8 rounded-[32px] border border-white/10 shadow-2xl animate-in zoom-in-95 space-y-6 relative overflow-hidden">
+          {improvingProject && (
+            <div className="absolute inset-0 z-50 bg-[#0A0F1E]/60 backdrop-blur-md flex flex-col items-center justify-center space-y-4">
+              <div className="w-12 h-12 border-t-2 border-[#BC00FF] rounded-full animate-spin"></div>
+              <span className="mono text-[8px] font-black text-[#BC00FF] uppercase tracking-widest">Refinando Objetivo...</span>
+            </div>
+          )}
+          
+          <div className="space-y-1">
+            <label className="mono text-[7px] font-black text-slate-500 uppercase ml-2 tracking-widest">Esfera de Responsabilidad</label>
+            <select 
+              value={formData.roleId}
+              onChange={e => setFormData({...formData, roleId: e.target.value})}
+              className="w-full bg-black/40 border border-white/10 p-4 rounded-2xl text-sm text-white outline-none focus:border-[#BC00FF]"
+            >
+              {state.roles.map(r => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <input 
+              placeholder="Título del Proyecto..." 
+              className="flex-1 bg-transparent text-2xl font-black outline-none border-b border-white/10 pb-4 focus:border-[#BC00FF] text-white uppercase italic"
+              value={formData.title}
+              onChange={e => setFormData({...formData, title: e.target.value})}
+            />
+            <button 
+                onClick={() => handleImprove(true)}
+                className="p-3 bg-[#BC00FF]/10 text-[#BC00FF] rounded-2xl border border-[#BC00FF]/20 hover:bg-[#BC00FF]/20 transition-all"
+                title="Mejorar con IA según Rol"
+            >
+                <span className="text-xl">✨</span>
+            </button>
+          </div>
+
           <textarea 
-            placeholder="Definición de impacto..."
-            className="w-full bg-white/5 border border-white/5 p-5 rounded-2xl text-sm outline-none text-slate-300 min-h-[100px]"
+            placeholder="Definición de impacto (qué quieres lograr y por qué)..."
+            className="w-full bg-white/5 border border-white/5 p-5 rounded-2xl text-sm outline-none text-slate-300 min-h-[100px] focus:border-[#BC00FF]/50"
             value={formData.description}
             onChange={e => setFormData({...formData, description: e.target.value})}
           />
@@ -142,7 +182,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
         </div>
       )}
 
-      {/* Scheduling Modal */}
+      {/* Modal de Agendamiento */}
       {schedulingStep && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in">
               <div className="bg-[#131B2E] w-full max-w-sm rounded-[32px] p-8 border border-white/10 space-y-6">
@@ -179,31 +219,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
           </div>
       )}
 
-      {/* Editing Step Modal */}
-      {editingStep && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in">
-            <div className="bg-[#131B2E] w-full max-w-sm rounded-[32px] p-8 border border-white/10 space-y-4">
-                <h3 className="mono text-[10px] font-black uppercase text-purple-400">Editar OKR Táctico</h3>
-                <input 
-                    className="w-full bg-black/40 border border-white/10 p-4 rounded-2xl text-white font-bold"
-                    value={state.projects.find(p => p.id === editingStep.projectId)?.steps.find(s => s.id === editingStep.stepId)?.text || ''}
-                    onChange={(e) => handleUpdateStep(editingStep.projectId, editingStep.stepId, { text: e.target.value })}
-                />
-                <textarea 
-                    className="w-full bg-black/40 border border-white/10 p-4 rounded-2xl text-white text-xs min-h-[80px]"
-                    value={state.projects.find(p => p.id === editingStep.projectId)?.steps.find(s => s.id === editingStep.stepId)?.instruction || ''}
-                    onChange={(e) => handleUpdateStep(editingStep.projectId, editingStep.stepId, { instruction: e.target.value })}
-                />
-                <button onClick={() => setEditingStep(null)} className="w-full bg-[#BC00FF] text-white py-4 rounded-2xl font-black uppercase text-xs">Actualizar</button>
-            </div>
-          </div>
-      )}
-
       <div className="grid grid-cols-1 gap-6">
         {state.projects.map(project => {
           const role = state.roles.find(r => r.id === project.roleId);
           return (
-            <div key={project.id} className="bg-[#131B2E] p-6 rounded-[32px] border border-white/5 space-y-6 shadow-xl relative group">
+            <div key={project.id} className="bg-[#131B2E] p-6 rounded-[32px] border border-white/5 space-y-6 shadow-xl relative group overflow-hidden">
                 <div className="flex justify-between items-start">
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
@@ -211,29 +231,54 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
                             <span className="mono text-[8px] font-black uppercase text-purple-400 tracking-[0.3em]">{role?.name}</span>
                         </div>
                         {editingProject === project.id ? (
-                            <div className="space-y-2">
-                                <input 
-                                    className="w-full bg-black/40 border border-white/10 p-2 rounded-xl text-white font-black uppercase italic tracking-tighter"
-                                    value={project.title}
-                                    onChange={(e) => updateProject(project.id, { title: e.target.value })}
-                                />
+                            <div className="space-y-4 relative">
+                                {improvingProject && (
+                                  <div className="absolute inset-0 z-10 bg-[#131B2E]/80 backdrop-blur-sm flex items-center justify-center rounded-2xl">
+                                    <div className="w-6 h-6 border-t-2 border-[#BC00FF] rounded-full animate-spin"></div>
+                                  </div>
+                                )}
+                                
+                                <div className="space-y-1">
+                                    <label className="mono text-[7px] font-black text-slate-600 uppercase ml-2 tracking-widest">Esfera de Responsabilidad</label>
+                                    <select 
+                                        value={project.roleId}
+                                        onChange={e => updateProject(project.id, { roleId: e.target.value })}
+                                        className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-xs text-white outline-none focus:border-[#BC00FF]"
+                                    >
+                                        {state.roles.map(r => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}
+                                    </select>
+                                </div>
+
+                                <div className="flex gap-2">
+                                  <input 
+                                      className="flex-1 bg-black/40 border border-white/10 p-3 rounded-xl text-white font-black uppercase italic tracking-tighter outline-none focus:border-[#BC00FF]"
+                                      value={project.title}
+                                      onChange={(e) => updateProject(project.id, { title: e.target.value })}
+                                  />
+                                  <button onClick={() => handleImprove(false, project.id)} className="p-2 bg-[#BC00FF]/10 text-[#BC00FF] rounded-xl border border-[#BC00FF]/20">✨</button>
+                                </div>
+                                
                                 <textarea 
-                                    className="w-full bg-black/40 border border-white/10 p-2 rounded-xl text-xs text-slate-300"
+                                    className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-xs text-slate-300 min-h-[80px] outline-none focus:border-[#BC00FF]"
                                     value={project.description}
                                     onChange={(e) => updateProject(project.id, { description: e.target.value })}
                                 />
-                                <button onClick={() => setEditingProject(null)} className="bg-emerald-500 text-white px-4 py-1 rounded-lg text-[8px] font-black uppercase">Guardar</button>
+                                
+                                <div className="flex gap-2">
+                                  <button onClick={() => setEditingProject(null)} className="flex-1 bg-emerald-500 text-white py-2 rounded-lg text-[9px] font-black uppercase tracking-widest">Sincronizar</button>
+                                  <button onClick={() => setEditingProject(null)} className="px-4 bg-white/5 text-slate-500 py-2 rounded-lg text-[9px] font-black uppercase">X</button>
+                                </div>
                             </div>
                         ) : (
                             <div onClick={() => setEditingProject(project.id)} className="cursor-pointer">
-                                <h3 className="text-2xl font-black uppercase italic tracking-tighter text-white">{project.title}</h3>
+                                <h3 className="text-2xl font-black uppercase italic tracking-tighter text-white hover:text-[#BC00FF] transition-colors">{project.title}</h3>
                                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">{project.description}</p>
                             </div>
                         )}
                     </div>
                     <button 
                         onClick={() => { if(confirm("¿Purgar proyecto y desvincular OKRs?")) deleteProject(project.id); }}
-                        className="opacity-0 group-hover:opacity-100 p-2 text-red-500/40 hover:text-red-500 transition-all"
+                        className="opacity-0 group-hover:opacity-100 p-2 text-red-500/40 hover:text-red-500 transition-all ml-2"
                     >
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="2" /></svg>
                     </button>
@@ -242,11 +287,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
                 {project.estimatedTotalWeeks && (
                     <div className="grid grid-cols-2 gap-3">
                         <div className="bg-cyan-500/5 border border-cyan-500/20 p-3 rounded-2xl flex flex-col items-center">
-                            <span className="mono text-[7px] font-black text-cyan-400 uppercase tracking-widest">Timeline Neural</span>
+                            <span className="mono text-[7px] font-black text-cyan-400 uppercase tracking-widest mb-1">Timeline Neural</span>
                             <span className="text-xl font-black text-white">{project.estimatedTotalWeeks} <small className="text-[10px] opacity-50 uppercase">Sem</small></span>
                         </div>
                         <div className="bg-[#BC00FF]/5 border border-[#BC00FF]/20 p-3 rounded-2xl flex flex-col items-center">
-                            <span className="mono text-[7px] font-black text-purple-400 uppercase tracking-widest">Esfuerzo Sugerido</span>
+                            <span className="mono text-[7px] font-black text-purple-400 uppercase tracking-widest mb-1">Esfuerzo Sugerido</span>
                             <span className="text-xl font-black text-white">{project.estimatedTotalHours}</span>
                         </div>
                     </div>
@@ -254,8 +299,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
 
                 <div className="space-y-3">
                     {project.steps.map((step) => (
-                        <div key={step.id} className="bg-white/[0.03] p-4 rounded-2xl border border-white/5 flex items-start justify-between gap-4 group/step">
-                            <div className="flex-1" onClick={() => setEditingStep({ projectId: project.id, stepId: step.id })}>
+                        <div key={step.id} className="bg-white/[0.03] p-4 rounded-2xl border border-white/5 flex items-start justify-between gap-4 group/step hover:bg-white/[0.05] transition-colors">
+                            <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
                                     <h4 className="text-sm font-bold text-slate-200">{step.text}</h4>
                                     {step.estimatedTime && <span className="mono text-[8px] font-black uppercase text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/10">IA: {step.estimatedTime}</span>}
@@ -264,9 +309,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
                             </div>
                             <div className="flex gap-2">
                                 {!step.taskId ? (
-                                    <button onClick={() => setSchedulingStep({ projectId: project.id, stepId: step.id })} className="bg-[#BC00FF] text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase">Agendar</button>
+                                    <button onClick={() => setSchedulingStep({ projectId: project.id, stepId: step.id })} className="bg-[#BC00FF] text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase active:scale-95 transition-all">Agendar</button>
                                 ) : (
-                                    <span className="mono text-[8px] text-emerald-500 font-black uppercase pt-2">✓</span>
+                                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                                      <span className="text-emerald-500 text-[10px]">✓</span>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -274,9 +321,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
                     <button 
                         onClick={() => handleBreakdown(project)}
                         disabled={loadingId === project.id}
-                        className="w-full py-4 bg-[#BC00FF]/10 border border-[#BC00FF]/20 text-[#BC00FF] rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-30"
+                        className="w-full py-4 bg-[#BC00FF]/10 border border-[#BC00FF]/20 text-[#BC00FF] rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-30 hover:bg-[#BC00FF]/20 active:scale-95"
                     >
-                        {loadingId === project.id ? 'IA Estimando...' : project.steps.length === 0 ? 'Proyectar con IA 💠' : 'Regenerar OKRs y Timeline'}
+                        {loadingId === project.id ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-3 h-3 border-2 border-[#BC00FF] border-t-transparent rounded-full animate-spin"></div>
+                            <span>Estimando Estructura...</span>
+                          </div>
+                        ) : project.steps.length === 0 ? 'Desglosar con IA 💠' : 'Regenerar OKRs y Timeline'}
                     </button>
                 </div>
             </div>
