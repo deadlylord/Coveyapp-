@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ViewType, SyncStatus } from '../types';
+import { ViewType, SyncStatus, AppTheme } from '../types';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -9,22 +9,28 @@ interface LayoutProps {
   onOpenCoach: () => void;
   syncStatus: SyncStatus;
   onReset: () => void;
+  theme: AppTheme;
+  toggleTheme: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onOpenCoach, syncStatus, onReset }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onOpenCoach, syncStatus, onReset, theme, toggleTheme }) => {
   return (
-    <div className="flex flex-col h-screen bg-[#0A0F1E] overflow-hidden text-white">
-      {/* Background Deep Navy with Glows */}
+    <div className={`flex flex-col h-screen overflow-hidden transition-colors duration-500 ${theme === 'dark' ? 'bg-[#0A0F1E] text-white' : 'bg-[#F1F5F9] text-slate-900'}`}>
+      {/* Background Glows */}
       <div className="fixed inset-0 pointer-events-none z-0">
-          <div className="absolute top-[5%] left-[5%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[160px]"></div>
-          <div className="absolute bottom-[5%] right-[5%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[160px]"></div>
+          <div className="absolute top-[5%] left-[5%] w-[40%] h-[40%] bg-purple-600/5 rounded-full blur-[160px]"></div>
+          <div className="absolute bottom-[5%] right-[5%] w-[40%] h-[40%] bg-blue-600/5 rounded-full blur-[160px]"></div>
       </div>
 
-      <header className="px-6 pt-12 pb-6 flex justify-between items-center relative z-10 border-b border-white/5 bg-[#0A0F1E]/60 backdrop-blur-md">
+      <header className={`px-6 pt-12 pb-6 flex justify-between items-center relative z-20 border-b transition-all duration-500 ${
+        theme === 'dark' 
+          ? 'border-white/5 bg-[#0A0F1E]/60 backdrop-blur-xl' 
+          : 'border-slate-200 bg-white/90 backdrop-blur-xl shadow-sm'
+      }`}>
         <div className="flex flex-col">
             <div className="flex items-center gap-4">
               <div className="w-1.5 h-8 bg-[#BC00FF] shadow-[0_0_15px_#BC00FF] rounded-full"></div>
-              <h1 className="text-2xl font-black tracking-tighter uppercase italic text-white leading-none">
+              <h1 className={`text-2xl font-black tracking-tighter uppercase italic leading-none ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
                 {activeView === 'PLANNER' && 'Agenda'}
                 {activeView === 'MATRIX' && 'Enfoque'}
                 {activeView === 'COMPASS' && 'Propósito'}
@@ -45,13 +51,24 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onOpenCo
             </div>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+            <button 
+                onClick={toggleTheme}
+                title="Alternar Modo Visual"
+                className="w-11 h-11 flex items-center justify-center bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all active:scale-90"
+            >
+                {theme === 'dark' ? (
+                  <svg className="w-5 h-5 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 5a7 7 0 100 14 7 7 0 000-14z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                ) : (
+                  <svg className="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+                )}
+            </button>
             <button 
                 onClick={onReset}
-                title="Purgar Sistema"
-                className="w-12 h-12 flex items-center justify-center bg-white/5 border border-white/10 rounded-2xl hover:bg-white/15 transition-all active:scale-90"
+                title="Sincronización Forzada"
+                className="w-11 h-11 flex items-center justify-center bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all active:scale-90 group"
             >
-                <svg className="w-6 h-6 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round"/></svg>
+                <svg className="w-5 h-5 text-slate-400 group-hover:rotate-180 transition-transform duration-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round"/></svg>
             </button>
         </div>
       </header>

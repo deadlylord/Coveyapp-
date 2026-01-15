@@ -13,14 +13,16 @@ const getAI = () => {
 // Utilidad para extraer JSON robusto de la respuesta
 const extractJSON = (text: string) => {
     try {
-        const start = text.indexOf('{');
-        const end = text.lastIndexOf('}');
-        if (start === -1 || end === -1) return JSON.parse(text);
-        const jsonStr = text.substring(start, end + 1);
+        // Limpiar el texto de posibles bloques de código markdown
+        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const start = cleanText.indexOf('{');
+        const end = cleanText.lastIndexOf('}');
+        if (start === -1 || end === -1) return JSON.parse(cleanText);
+        const jsonStr = cleanText.substring(start, end + 1);
         return JSON.parse(jsonStr);
     } catch (e) {
         console.error("Failed to parse JSON from AI response:", text);
-        throw new Error("INVALID_AI_RESPONSE");
+        return {};
     }
 };
 
@@ -28,7 +30,7 @@ const createTaskTool: FunctionDeclaration = {
   name: 'crear_tarea',
   parameters: {
     type: Type.OBJECT,
-    description: 'Crea una nueva tarea en la agenda del usuario.',
+    description: 'Sugiere crear una nueva tarea en la agenda del usuario.',
     properties: {
       title: { type: Type.STRING, description: 'Título de la tarea' },
       roleId: { type: Type.STRING, description: 'ID del rol asociado' },
@@ -44,7 +46,7 @@ const createProjectTool: FunctionDeclaration = {
   name: 'crear_proyecto',
   parameters: {
     type: Type.OBJECT,
-    description: 'Crea un nuevo proyecto estratégico con descripción.',
+    description: 'Sugiere crear un nuevo proyecto estratégico.',
     properties: {
       title: { type: Type.STRING, description: 'Nombre del proyecto' },
       description: { type: Type.STRING, description: 'Objetivo y alcance' },
@@ -55,7 +57,7 @@ const createProjectTool: FunctionDeclaration = {
 };
 
 const getSystemInstruction = (mode: CoachMode) => {
-  const base = `Eres Core Assist (V8.0 NEURAL ARCHITECT). Tu misión es optimizar la arquitectura de vida y negocio del usuario mediante principios de alto impacto (80/20).`;
+  const base = `Eres Core Assist (V8.0 NEURAL ARCHITECT). Tu misión es optimizar la arquitectura de vida y negocio mediante el principio 80/20.`;
   const modes: Record<CoachMode, string> = {
     STRATEGIST: `${base} Modo: Estratega Core. Prioriza Q2 y eficiencia operativa.`,
     BUSINESS_OWNER: `${base} Modo: Arquitecto de Negocios. Enfócate en ROI, escalabilidad y delegación.`,
@@ -64,10 +66,10 @@ const getSystemInstruction = (mode: CoachMode) => {
   };
   return `${modes[mode] || modes.STRATEGIST}
 
-REGLAS DE CONTEXTO:
-- Tienes acceso al historial de logros del usuario.
-- Eres experto en estimación de proyectos. Analiza la complejidad y sugiere duración en SEMANAS.
-- Sé directo. Formato Markdown para textos descriptivos.`;
+REGLAS DE ORO:
+1. SIEMPRE pida confirmación antes de llamar a herramientas de creación. Di algo como "¿Deseas que agende esta tarea por ti?".
+2. Solo usa las herramientas si el usuario lo solicita explícitamente o confirma tu sugerencia.
+3. Sé directo. Formato Markdown.`;
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
@@ -109,16 +111,16 @@ export async function breakdownProject(project: Project) {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: [{ parts: [{ text: `Analiza y desglosa: Proyecto: ${project.title}. Descripción: ${project.description}` }] }],
+        model: 'gemini-3-flash-preview',
+        contents: [{ parts: [{ text: `Analiza y desglosa este proyecto en pasos lógicos. Proyecto: ${project.title}. Descripción: ${project.description}` }] }],
         config: { 
-          systemInstruction: getSystemInstruction('BUSINESS_OWNER'),
+          systemInstruction: "Eres un gestor de proyectos experto. Desglosa el proyecto en pasos accionables SMART.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              estimatedTotalWeeks: { type: Type.INTEGER, description: "Número de semanas recomendadas para completar" },
-              estimatedTotalHours: { type: Type.STRING, description: "Esfuerzo total estimado (ej: 40h)" },
+              estimatedTotalWeeks: { type: Type.INTEGER },
+              estimatedTotalHours: { type: Type.STRING },
               steps: {
                 type: Type.ARRAY,
                 items: {
@@ -147,15 +149,15 @@ export async function improveProjectObjective(title: string, description: string
         const ai = getAI();
         const response = await ai.models.generateContent({
           model: 'gemini-3-flash-preview',
-          contents: [{ parts: [{ text: `Optimiza este objetivo de proyecto específicamente para el contexto del rol: "${roleName}". Convierte el título en algo potente y corto, y la descripción en una definición de impacto SMART. Título actual: "${title}". Descripción: "${description}".` }] }],
+          contents: [{ parts: [{ text: `Optimiza este objetivo de proyecto para el rol: "${roleName}". Título: "${title}". Descripción: "${description}".` }] }],
           config: { 
-              systemInstruction: `Eres un estratega experto. Tu misión es refinar objetivos para que sean de alto impacto según la esfera de responsabilidad indicada: ${roleName}.`,
+              systemInstruction: `Refina objetivos para que sean de alto impacto.`,
               responseMimeType: "application/json",
               responseSchema: {
                   type: Type.OBJECT,
                   properties: { 
-                      title: { type: Type.STRING, description: "Título optimizado" }, 
-                      description: { type: Type.STRING, description: "Descripción optimizada enfocada en impacto" } 
+                      title: { type: Type.STRING }, 
+                      description: { type: Type.STRING } 
                   },
                   required: ["title", "description"]
               }

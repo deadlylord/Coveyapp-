@@ -6,6 +6,7 @@ interface CompassViewProps {
   state: AppState;
   userEmail: string;
   onLogout: () => void;
+  onPurgeExecution: () => void;
   updateMission: (text: string) => void;
   updateUserName: (name: string) => void;
   addRole: (role: Role) => void;
@@ -16,7 +17,7 @@ interface CompassViewProps {
   syncStatus: SyncStatus;
 }
 
-const CompassView: React.FC<CompassViewProps> = ({ state, userEmail, onLogout, updateMission, updateUserName, addRole, deleteRole, updateRole, updateRoleGoal, setView, syncStatus }) => {
+const CompassView: React.FC<CompassViewProps> = ({ state, userEmail, onLogout, onPurgeExecution, updateMission, updateUserName, addRole, deleteRole, updateRole, updateRoleGoal, setView, syncStatus }) => {
   const [expandedRoleId, setExpandedRoleId] = useState<string | null>(state.roles[0]?.id || null);
   const [isAddingRole, setIsAddingRole] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');
@@ -81,6 +82,24 @@ const CompassView: React.FC<CompassViewProps> = ({ state, userEmail, onLogout, u
             className="w-full h-56 p-8 bg-white/[0.02] border border-white/5 rounded-[40px] text-lg font-medium leading-relaxed shadow-2xl outline-none focus:border-[#BC00FF]/30 transition-all text-slate-300 placeholder:text-slate-800"
             placeholder="Define tu propósito inmutable..."
         />
+      </section>
+
+      {/* Purge Section */}
+      <section className="p-8 rounded-[32px] border border-red-500/10 bg-red-500/5 space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <h3 className="text-lg font-black uppercase italic text-red-500 leading-tight">Protocolo de Purga</h3>
+              <p className="text-[10px] text-red-500/60 font-bold uppercase tracking-widest">Eliminación de Capa Ejecutiva</p>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed">Este comando eliminará todas las <strong>Tareas</strong> y <strong>Proyectos</strong> actuales sin afectar tu misión ni tus esferas de rol.</p>
+          <button 
+            onClick={onPurgeExecution}
+            className="w-full py-4 bg-red-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-lg"
+          >
+            Resetear Tareas y Proyectos
+          </button>
       </section>
 
       {/* Roles Section */}

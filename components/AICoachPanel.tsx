@@ -35,6 +35,7 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [copyStatus, setCopyStatus] = useState<number | null>(null);
+  const [pendingAction, setPendingAction] = useState<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const activeMode = COACH_MODES.find(m => m.id === state.coachMode) || COACH_MODES[0];
@@ -54,7 +55,7 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
     if (scrollRef.current) {
         scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }
-  }, [messages, loading]);
+  }, [messages, loading, pendingAction]);
 
   const handleCopy = (text: string, index: number) => {
     navigator.clipboard.writeText(text);
@@ -68,6 +69,43 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
     }
   };
 
+  const executeAction = () => {
+    if (!pendingAction) return;
+    
+    if (pendingAction.type === 'tarea') {
+      const args = pendingAction.args;
+      const newTask: Task = {
+        id: 'ai_task_' + Date.now() + Math.random(),
+        title: args.title,
+        roleId: args.roleId || '1',
+        quadrant: (args.quadrant as Quadrant) || 'II',
+        day: args.day !== undefined ? args.day : null,
+        time: args.time || undefined,
+        weekOffset: 0,
+        completed: false,
+        isBigRock: args.quadrant === 'II',
+        updatedAt: Date.now()
+      };
+      onAddTask(newTask);
+    } else if (pendingAction.type === 'proyecto') {
+      const args = pendingAction.args;
+      const newProj: Project = {
+        id: 'ai_proj_' + Date.now(),
+        title: args.title,
+        description: args.description,
+        roleId: args.roleId || '2',
+        targetSessions: 10,
+        completedSessions: 0,
+        steps: [],
+        updatedAt: Date.now()
+      };
+      onAddProject(newProj);
+    }
+
+    onAddMessage({ role: 'coach', text: `¡Acción ejecutada! He creado el ${pendingAction.type} en tu sistema. ⚡`, timestamp: Date.now() });
+    setPendingAction(null);
+  };
+
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() || loading) return;
@@ -79,45 +117,17 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
 
     try {
       const response = await getCoachResponse(userMsg, state);
-      let actionsTaken = 0;
       
       if (response.functionCalls) {
-        for (const call of response.functionCalls) {
-          if (call.name === 'crear_tarea') {
-            const args = call.args as any;
-            const newTask: Task = {
-              id: 'ai_task_' + Date.now() + Math.random(),
-              title: args.title,
-              roleId: args.roleId || '1',
-              quadrant: (args.quadrant as Quadrant) || 'II',
-              day: args.day !== undefined ? args.day : null,
-              time: args.time || undefined,
-              weekOffset: 0,
-              completed: false,
-              isBigRock: args.quadrant === 'II',
-              updatedAt: Date.now()
-            };
-            onAddTask(newTask);
-            actionsTaken++;
-          } else if (call.name === 'crear_proyecto') {
-            const args = call.args as any;
-            const newProj: Project = {
-              id: 'ai_proj_' + Date.now(),
-              title: args.title,
-              description: args.description,
-              roleId: args.roleId || '2',
-              targetSessions: 10,
-              completedSessions: 0,
-              steps: [],
-              updatedAt: Date.now()
-            };
-            onAddProject(newProj);
-            actionsTaken++;
-          }
+        const call = response.functionCalls[0];
+        if (call.name === 'crear_tarea') {
+          setPendingAction({ type: 'tarea', args: call.args });
+        } else if (call.name === 'crear_proyecto') {
+          setPendingAction({ type: 'proyecto', args: call.args });
         }
       }
 
-      const coachText = response.text || (actionsTaken > 0 ? "He ejecutado las acciones solicitadas en tu sistema Core. ⚡" : "Entendido. Procesando... 💠");
+      const coachText = response.text || "Entendido. He procesado tu solicitud. 💠";
       onAddMessage({ role: 'coach', text: coachText, timestamp: Date.now() });
       
     } catch (err) {
@@ -179,12 +189,11 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
             <div className="flex items-center gap-3">
               <button 
                 onClick={handleClearHistory}
-                title="Limpiar Historial"
-                className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center hover:bg-red-500/10 active:scale-90 transition-all border border-white/5"
+                className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center hover:bg-red-500/10 border border-white/5"
               >
                 <svg className="w-6 h-6 text-red-500/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
               </button>
-              <button onClick={onClose} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center hover:bg-white/10 active:scale-90 transition-all">
+              <button onClick={onClose} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -213,7 +222,7 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
 
         <div ref={scrollRef} className="flex-1 p-8 overflow-y-auto scroll-hide space-y-8 bg-gradient-to-b from-transparent to-black/20">
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-500 group/msg`}>
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 group/msg`}>
               <div className={`max-w-[90%] p-6 rounded-[32px] leading-relaxed shadow-2xl relative ${
                 m.role === 'user' 
                 ? 'bg-[#BC00FF] text-white font-bold border-r-4 border-white/20' 
@@ -224,7 +233,7 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
                 {m.role === 'coach' && (
                   <button 
                     onClick={() => handleCopy(m.text, i)}
-                    className="absolute -top-3 -right-3 w-10 h-10 bg-[#131B2E] border border-white/10 rounded-xl flex items-center justify-center shadow-xl opacity-0 group-hover/msg:opacity-100 transition-all hover:bg-white/10 active:scale-90"
+                    className="absolute -top-3 -right-3 w-10 h-10 bg-[#131B2E] border border-white/10 rounded-xl flex items-center justify-center opacity-0 group-hover/msg:opacity-100 transition-all hover:bg-white/10"
                   >
                     {copyStatus === i ? (
                         <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M5 13l4 4L19 7" /></svg>
@@ -236,6 +245,27 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
               </div>
             </div>
           ))}
+
+          {pendingAction && (
+            <div className="flex justify-start animate-in zoom-in-95">
+              <div className="bg-[#131B2E] p-6 rounded-[32px] border border-[#BC00FF]/40 shadow-[0_0_30px_rgba(188,0,255,0.1)] space-y-4 max-w-[85%]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#BC00FF]/20 rounded-xl flex items-center justify-center text-[#BC00FF]">
+                    {pendingAction.type === 'tarea' ? '📌' : '📁'}
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black uppercase text-white tracking-widest">Confirmar {pendingAction.type}</h4>
+                    <p className="text-[10px] text-slate-500 font-bold truncate">{pendingAction.args.title}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={executeAction} className="flex-1 bg-[#BC00FF] text-white py-3 rounded-xl text-[9px] font-black uppercase">Confirmar</button>
+                  <button onClick={() => setPendingAction(null)} className="px-5 bg-white/5 text-slate-500 py-3 rounded-xl text-[9px] font-black uppercase">Ignorar</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {loading && (
               <div className="flex justify-start">
                   <div className="bg-white/5 p-5 rounded-[24px] flex gap-3 border border-white/5">
@@ -254,7 +284,7 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Haz una pregunta o pide una acción..."
-              className="flex-1 p-5 bg-[#131B2E] border border-white/10 rounded-3xl outline-none focus:border-[#BC00FF] focus:ring-4 focus:ring-[#BC00FF]/5 text-white font-bold text-base transition-all placeholder:text-slate-600"
+              className="flex-1 p-5 bg-[#131B2E] border border-white/10 rounded-3xl outline-none focus:border-[#BC00FF] text-white font-bold text-base transition-all placeholder:text-slate-600"
             />
             <button className="w-16 h-16 bg-[#BC00FF] text-white rounded-3xl flex items-center justify-center shadow-[0_15px_30px_rgba(188,0,255,0.3)] active:scale-90 transition-all hover:brightness-110">
               <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="4" viewBox="0 0 24 24"><path d="M13 5l7 7-7 7M5 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" /></svg>

@@ -8,12 +8,22 @@ import ProjectsView from './components/ProjectsView';
 import MethodologyView from './components/MethodologyView';
 import AICoachPanel from './components/AICoachPanel';
 import AuthView from './components/AuthView';
-import { AppState, ViewType, Task, Role, Quadrant, SyncStatus, Project, CoachMode, ChatMessage } from './types';
+import { AppState, ViewType, Task, Role, Quadrant, SyncStatus, Project, CoachMode, AppTheme } from './types';
 import { saveUserData, loadUserData, auth, onAuthStateChanged, signOut } from './firebase';
+
+const MOTIVATIONAL_PHRASES = [
+  "La disciplina es el puente entre las metas y los logros.",
+  "No te detengas cuando estés cansado, detente cuando hayas terminado.",
+  "El éxito es la suma de pequeños esfuerzos repetidos día tras día.",
+  "Tu futuro se crea por lo que haces hoy, no mañana.",
+  "La excelencia no es un acto, sino un hábito.",
+  "Si quieres algo que nunca has tenido, debes hacer algo que nunca has hecho."
+];
 
 const INITIAL_STATE: AppState = {
   userName: "Operativo",
   coachMode: "STRATEGIST",
+  theme: "dark",
   mission: { text: "Vivir con integridad y priorizar el impacto estratégico.", updatedAt: Date.now() },
   roles: [
     { id: '1', name: 'Individual', icon: '🧠', goal: 'Optimizar energía biológica.', color: 'bg-emerald-500', createdAt: Date.now(), updatedAt: Date.now() },
@@ -32,6 +42,7 @@ const App: React.FC = () => {
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const [isCoachOpen, setIsCoachOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('loading');
+  const [loadingPhrase] = useState(() => MOTIVATIONAL_PHRASES[Math.floor(Math.random() * MOTIVATIONAL_PHRASES.length)]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -53,6 +64,14 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (state.theme === 'light') {
+      document.body.classList.add('light-mode');
+    } else {
+      document.body.classList.remove('light-mode');
+    }
+  }, [state.theme]);
+
+  useEffect(() => {
     if (!user || syncStatus === 'loading') return;
     const timer = setTimeout(async () => {
       setSyncStatus('syncing');
@@ -64,7 +83,17 @@ const App: React.FC = () => {
 
   const updateState = (updater: (prev: AppState) => AppState) => setState(prev => updater(prev));
 
+  const toggleTheme = () => {
+    updateState(prev => ({ ...prev, theme: prev.theme === 'light' ? 'dark' : 'light' }));
+  };
+
   const handleLogout = async () => { if (confirm("¿Cerrar sesión?")) await signOut(auth); };
+
+  const purgeExecution = () => {
+    if (confirm("¿Confirmas la purga total de Tareas y Proyectos? (Misión y Roles se mantendrán)")) {
+      updateState(prev => ({ ...prev, tasks: [], projects: [] }));
+    }
+  };
 
   const addTask = (task: Task) => updateState(prev => ({ ...prev, tasks: [...prev.tasks, task] }));
   const updateTask = (id: string, updates: Partial<Task>) => updateState(prev => ({ ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, ...updates, updatedAt: Date.now() } : t) }));
@@ -77,14 +106,46 @@ const App: React.FC = () => {
   const deleteProject = (id: string) => updateState(prev => ({ ...prev, projects: prev.projects.filter(p => p.id !== id), tasks: prev.tasks.filter(t => t.projectId !== id) }));
   const scheduleProjectTask = (projectId: string, stepId: string, task: Task) => { updateState(prev => ({ ...prev, tasks: [...prev.tasks, task], projects: prev.projects.map(p => p.id === projectId ? { ...p, steps: p.steps.map(s => s.id === stepId ? { ...s, taskId: task.id } : s), updatedAt: Date.now() } : p) })); };
 
-  if (!isAppReady) return <div className="h-screen w-screen bg-[#0A0F1E] flex flex-col items-center justify-center space-y-6"><div className="w-20 h-20 border-t-2 border-[#BC00FF] rounded-full animate-spin"></div></div>;
+  if (!isAppReady) return (
+    <div className="h-screen w-screen bg-[#0A0F1E] flex flex-col items-center justify-center p-8 text-center">
+      <div className="mb-10 flex flex-col items-center">
+        <h1 className="text-4xl font-black text-white italic uppercase tracking-tighter mb-2">Core Assist</h1>
+        <div className="w-12 h-1 bg-[#BC00FF] rounded-full shadow-[0_0_15px_#BC00FF]"></div>
+      </div>
+      <div className="w-20 h-20 border-t-2 border-[#BC00FF] rounded-full animate-spin mb-10"></div>
+      <p className="mono text-[10px] font-black text-[#BC00FF] uppercase tracking-[0.3em] max-w-xs animate-pulse">
+        {loadingPhrase}
+      </p>
+    </div>
+  );
 
   if (!user) return <AuthView />;
 
   return (
-    <Layout activeView={activeView} setView={setActiveView} onOpenCoach={() => setIsCoachOpen(!isCoachOpen)} syncStatus={syncStatus} onReset={() => window.location.reload()}>
+    <Layout 
+      activeView={activeView} 
+      setView={setActiveView} 
+      onOpenCoach={() => setIsCoachOpen(!isCoachOpen)} 
+      syncStatus={syncStatus} 
+      onReset={() => window.location.reload()}
+      theme={state.theme || 'dark'}
+      toggleTheme={toggleTheme}
+    >
       {activeView === 'COMPASS' && (
-        <CompassView state={state} userEmail={user.email} onLogout={handleLogout} updateMission={(text) => updateState(prev => ({...prev, mission: {text, updatedAt: Date.now()}}))} updateUserName={(name) => updateState(prev => ({ ...prev, userName: name }))} addRole={(role) => updateState(prev => ({...prev, roles: [...prev.roles, role]}))} deleteRole={(id) => updateState(prev => ({...prev, roles: prev.roles.filter(r => r.id !== id)}))} updateRole={(id, updates) => updateState(prev => ({...prev, roles: prev.roles.map(r => r.id === id ? {...r, ...updates, updatedAt: Date.now()} : r)}))} updateRoleGoal={(id, goal) => updateState(prev => ({...prev, roles: prev.roles.map(r => r.id === id ? {...r, goal, updatedAt: Date.now()} : r)}))} setView={setActiveView} syncStatus={syncStatus} />
+        <CompassView 
+          state={state} 
+          userEmail={user.email} 
+          onLogout={handleLogout} 
+          onPurgeExecution={purgeExecution}
+          updateMission={(text) => updateState(prev => ({...prev, mission: {text, updatedAt: Date.now()}}))} 
+          updateUserName={(name) => updateState(prev => ({ ...prev, userName: name }))} 
+          addRole={(role) => updateState(prev => ({...prev, roles: [...prev.roles, role]}))} 
+          deleteRole={(id) => updateState(prev => ({...prev, roles: prev.roles.filter(r => r.id !== id)}))} 
+          updateRole={(id, updates) => updateState(prev => ({...prev, roles: prev.roles.map(r => r.id === id ? {...r, ...updates, updatedAt: Date.now()} : r)}))} 
+          updateRoleGoal={(id, goal) => updateState(prev => ({...prev, roles: prev.roles.map(r => r.id === id ? {...r, goal, updatedAt: Date.now()} : r)}))} 
+          setView={setActiveView} 
+          syncStatus={syncStatus} 
+        />
       )}
       {activeView === 'PLANNER' && <PlannerView state={state} addTask={addTask} updateTask={updateTask} toggleTask={toggleTask} moveTask={moveTask} deleteTask={deleteTask} currentWeekOffset={currentWeekOffset} setCurrentWeekOffset={setCurrentWeekOffset} />}
       {activeView === 'MATRIX' && <MatrixView state={state} updateQuadrant={updateQuadrant} addTask={addTask} updateTask={updateTask} toggleTask={toggleTask} moveTask={moveTask} currentWeekOffset={currentWeekOffset} setCurrentWeekOffset={setCurrentWeekOffset} />}

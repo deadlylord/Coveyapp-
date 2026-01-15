@@ -46,8 +46,8 @@ export type Project = {
   targetSessions: number;
   completedSessions: number;
   steps: ProjectStep[];
-  estimatedTotalWeeks?: number; // Sugerencia de la IA
-  estimatedTotalHours?: string; // Sugerencia de la IA
+  estimatedTotalWeeks?: number; 
+  estimatedTotalHours?: string; 
   updatedAt: number;
 };
 
@@ -64,10 +64,13 @@ export type ChatMessage = {
 
 export type CoachMode = 'STRATEGIST' | 'SOCRATIC' | 'BUSINESS_OWNER' | 'ZEN_ENERGY';
 
+export type AppTheme = 'dark' | 'light';
+
 export type AppState = {
   userName: string;
   cloudId?: string;
   coachMode: CoachMode;
+  theme?: AppTheme;
   mission: Mission;
   roles: Role[];
   tasks: Task[];
