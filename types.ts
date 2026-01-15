@@ -76,6 +76,7 @@ export type AppState = {
   tasks: Task[];
   projects: Project[];
   coachMessages: ChatMessage[];
+  notificationsEnabled?: boolean;
   version?: number;
 };
 

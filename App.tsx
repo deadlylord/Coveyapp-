@@ -32,6 +32,7 @@ const INITIAL_STATE: AppState = {
   tasks: [],
   projects: [],
   coachMessages: [],
+  notificationsEnabled: false
 };
 
 const App: React.FC = () => {
@@ -62,6 +63,37 @@ const App: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  // Lógica de Notificaciones de Tareas
+  useEffect(() => {
+    if (!state.notificationsEnabled) return;
+
+    const checkTasksInterval = setInterval(() => {
+      const now = new Date();
+      const currentHours = now.getHours().toString().padStart(2, '0');
+      const currentMinutes = now.getMinutes().toString().padStart(2, '0');
+      const currentTimeStr = `${currentHours}:${currentMinutes}`;
+      const todayIdx = (now.getDay() + 6) % 7;
+
+      const upcomingTask = state.tasks.find(t => 
+        !t.completed && 
+        t.day === todayIdx && 
+        t.weekOffset === 0 && 
+        t.time === currentTimeStr
+      );
+
+      if (upcomingTask) {
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification(`Core Assist: Objetivo Activo`, {
+            body: `Iniciando: ${upcomingTask.title}`,
+            icon: "https://cdn-icons-png.flaticon.com/512/3239/3239044.png"
+          });
+        }
+      }
+    }, 60000); // Revisar cada minuto
+
+    return () => clearInterval(checkTasksInterval);
+  }, [state.tasks, state.notificationsEnabled]);
 
   useEffect(() => {
     if (state.theme === 'light') {
@@ -144,7 +176,8 @@ const App: React.FC = () => {
           updateRole={(id, updates) => updateState(prev => ({...prev, roles: prev.roles.map(r => r.id === id ? {...r, ...updates, updatedAt: Date.now()} : r)}))} 
           updateRoleGoal={(id, goal) => updateState(prev => ({...prev, roles: prev.roles.map(r => r.id === id ? {...r, goal, updatedAt: Date.now()} : r)}))} 
           setView={setActiveView} 
-          syncStatus={syncStatus} 
+          syncStatus={syncStatus}
+          updateNotifications={(enabled) => updateState(prev => ({ ...prev, notificationsEnabled: enabled }))}
         />
       )}
       {activeView === 'PLANNER' && <PlannerView state={state} addTask={addTask} updateTask={updateTask} toggleTask={toggleTask} moveTask={moveTask} deleteTask={deleteTask} currentWeekOffset={currentWeekOffset} setCurrentWeekOffset={setCurrentWeekOffset} />}

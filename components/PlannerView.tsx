@@ -44,8 +44,7 @@ const MOTIVATIONAL_PHRASES = [
   "No te detengas cuando estés cansado, detente cuando hayas terminado.",
   "El éxito es la suma de pequeños esfuerzos repetidos día tras día.",
   "Tu futuro se crea por lo que haces hoy, no mañana.",
-  "La excelencia no es un acto, sino un hábito.",
-  "Si quieres algo que nunca has tenido, haz algo diferente."
+  "La excelencia no es un acto, sino un hábito."
 ];
 
 interface PlannerViewProps {
@@ -79,8 +78,7 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
     firstDayOfWeek.setDate(diff + (currentWeekOffset * 7) + dayIdx);
     return {
       date: firstDayOfWeek.getDate(),
-      month: firstDayOfWeek.toLocaleString('es-ES', { month: 'short' }),
-      full: firstDayOfWeek
+      month: firstDayOfWeek.toLocaleString('es-ES', { month: 'short' })
     };
   };
 
@@ -111,10 +109,7 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
       .filter(t => t.day === idx && t.weekOffset === currentWeekOffset)
       .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
   
-  const sandTasks = state.tasks.filter(t => 
-    (t.day === null || t.day === undefined) && 
-    t.weekOffset === currentWeekOffset
-  );
+  const sandTasks = state.tasks.filter(t => (t.day === null || t.day === undefined) && t.weekOffset === currentWeekOffset);
 
   const handleDragOver = (e: React.DragEvent, target: number | 'arena') => {
     e.preventDefault();
@@ -159,19 +154,6 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
             <span className="text-xs font-black uppercase tracking-tight">{role.name}</span>
           </button>
         ))}
-      </div>
-
-      <div className="px-6 flex items-center justify-between">
-          <button onClick={() => setCurrentWeekOffset(prev => prev - 1)} className="p-3 bg-white/5 border border-white/10 rounded-xl">
-            <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <div className="text-center">
-              <h3 className="mono text-[8px] font-black uppercase tracking-[0.4em] text-purple-400">Visión Global</h3>
-              <p className="text-lg font-black text-white mt-0.5 tracking-tighter uppercase italic">{getDayInfo(0).date} {getDayInfo(0).month} — {getDayInfo(6).date} {getDayInfo(6).month}</p>
-          </div>
-          <button onClick={() => setCurrentWeekOffset(prev => prev + 1)} className="p-3 bg-white/5 border border-white/10 rounded-xl">
-            <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
-          </button>
       </div>
 
       <div className="px-6">
@@ -225,7 +207,7 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
               onToggle={() => toggleTask(task.id)} 
               onExpand={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)} 
               onUpdate={(upd) => updateTask(task.id, upd)} 
-              onDelete={() => deleteTask(task.id)}
+              onDelete={() => { NeuralFeedback.play('delete'); deleteTask(task.id); }}
               onMoveToArena={() => moveTask(task.id, null, currentWeekOffset)}
             />
           ))}
@@ -254,12 +236,6 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
                       <h2 className={`text-xl font-black uppercase tracking-tighter italic ${isToday ? 'text-white' : 'text-slate-500'}`}>{dayName}</h2>
                       <span className={`mono text-xs font-bold ${isToday ? 'text-purple-400' : 'text-slate-700'}`}>{getDayInfo(idx).date} {getDayInfo(idx).month}</span>
                   </div>
-                  {isToday && (
-                    <div className="flex items-center gap-2 px-3 py-1 bg-[#BC00FF]/20 rounded-full border border-[#BC00FF]/30 animate-pulse">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#BC00FF]"></div>
-                        <span className="mono text-[7px] font-black text-[#BC00FF] uppercase tracking-widest">SISTEMA ACTIVO</span>
-                    </div>
-                  )}
               </div>
               <div className="space-y-3">
                   {tasksForDay(idx).map(task => (
@@ -273,7 +249,7 @@ const PlannerView: React.FC<PlannerViewProps> = ({ state, addTask, updateTask, t
                         onToggle={() => toggleTask(task.id)} 
                         onExpand={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)} 
                         onUpdate={(upd) => updateTask(task.id, upd)} 
-                        onDelete={() => deleteTask(task.id)}
+                        onDelete={() => { NeuralFeedback.play('delete'); deleteTask(task.id); }}
                         onMoveToArena={() => moveTask(task.id, null, currentWeekOffset)}
                     />
                   ))}
@@ -297,7 +273,7 @@ const TaskCard = ({ task, roles, isHighlighted, isDimmed, isExpanded, onToggle, 
         let interval: any;
         if (isRunning && timeLeft > 0) {
             interval = setInterval(() => {
-                setTimeLeft(prev => prev - 1 / 60);
+                setTimeLeft(prev => Math.max(0, prev - 1 / 60));
             }, 1000);
         } else if (timeLeft <= 0) {
             setIsRunning(false);
@@ -336,7 +312,6 @@ const TaskCard = ({ task, roles, isHighlighted, isDimmed, isExpanded, onToggle, 
         >
             <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#BC00FF] opacity-30"></div>
             
-            {/* Header / Mini View */}
             <div className="p-4 flex items-center gap-4" onClick={onExpand}>
                 <button 
                     onClick={handleToggleInternal}
@@ -361,10 +336,8 @@ const TaskCard = ({ task, roles, isHighlighted, isDimmed, isExpanded, onToggle, 
                 </button>
             </div>
             
-            {/* Full Detailed View */}
             {isExpanded && (
                 <div className="px-6 pb-8 pt-4 border-t border-white/5 space-y-8 animate-in slide-in-from-top-4">
-                    {/* Sincronia Temporal */}
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
                             <label className="mono text-[7px] font-black uppercase text-slate-500 tracking-[0.2em]">Sincronía Temporal</label>
@@ -382,7 +355,6 @@ const TaskCard = ({ task, roles, isHighlighted, isDimmed, isExpanded, onToggle, 
                         />
                     </div>
 
-                    {/* Cronometría */}
                     <div className="space-y-3">
                         <label className="mono text-[7px] font-black uppercase text-slate-500 tracking-[0.2em]">Cronometría (Minutos)</label>
                         <div className="flex gap-2">
@@ -406,7 +378,6 @@ const TaskCard = ({ task, roles, isHighlighted, isDimmed, isExpanded, onToggle, 
                         </div>
                     </div>
 
-                    {/* Impacto Eisenhower */}
                     <div className="space-y-3">
                         <label className="mono text-[7px] font-black uppercase text-slate-500 tracking-[0.2em]">Impacto Eisenhower</label>
                         <select 
@@ -421,7 +392,6 @@ const TaskCard = ({ task, roles, isHighlighted, isDimmed, isExpanded, onToggle, 
                         </select>
                     </div>
 
-                    {/* Esfera de Rol */}
                     <div className="space-y-3">
                         <label className="mono text-[7px] font-black uppercase text-slate-500 tracking-[0.2em]">Esfera de Rol</label>
                         <select 
@@ -435,28 +405,26 @@ const TaskCard = ({ task, roles, isHighlighted, isDimmed, isExpanded, onToggle, 
                         </select>
                     </div>
 
-                    {/* Contexto Neural */}
                     <div className="space-y-3">
                         <label className="mono text-[7px] font-black uppercase text-slate-500 tracking-[0.2em]">Contexto Neural</label>
                         <textarea 
-                            className="w-full bg-black/40 border border-white/5 p-4 rounded-2xl text-xs text-slate-300 min-h-[100px] outline-none focus:border-[#BC00FF]/30 leading-relaxed"
-                            placeholder="Notas estratégicas, subtareas o contexto..."
+                            className="w-full bg-black/40 border border-white/5 p-4 rounded-2xl text-xs text-slate-300 min-h-[100px] outline-none focus:border-[#BC00FF]/30"
+                            placeholder="Notas estratégicas..."
                             value={task.description || ''}
                             onChange={(e) => onUpdate({ description: e.target.value })}
                         />
                     </div>
 
-                    {/* Footer Actions */}
                     <div className="flex gap-3 pt-4 border-t border-white/5">
                         <button 
                             onClick={(e) => { e.stopPropagation(); onMoveToArena(); }}
-                            className="flex-1 py-4 bg-white/5 text-slate-400 rounded-2xl text-[8px] font-black uppercase tracking-widest hover:bg-white/10 transition-all border border-white/5"
+                            className="flex-1 py-4 bg-white/5 text-slate-400 rounded-2xl text-[8px] font-black uppercase tracking-widest border border-white/5"
                         >
                             Mover a Arena
                         </button>
                         <button 
-                            onClick={(e) => { e.stopPropagation(); NeuralFeedback.play('delete'); onDelete(); }}
-                            className="flex-1 py-4 bg-red-500/10 text-red-500 rounded-2xl text-[8px] font-black uppercase tracking-widest hover:bg-red-500/20 transition-all border border-red-500/20"
+                            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                            className="flex-1 py-4 bg-red-500/10 text-red-500 rounded-2xl text-[8px] font-black uppercase tracking-widest border border-red-500/20"
                         >
                             Purgar Tarea
                         </button>
