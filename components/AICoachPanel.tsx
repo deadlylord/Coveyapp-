@@ -69,12 +69,10 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
     try {
       const response = await getCoachResponse(msgToSend, state);
       
-      // Procesar texto de respuesta
       if (response.text) {
         onAddMessage(state.coachMode, { role: 'coach', text: response.text, timestamp: Date.now() });
       }
 
-      // Procesar llamadas a funciones (CONFIRMACIÓN REQUERIDA)
       if (response.functionCalls && response.functionCalls.length > 0) {
         setPendingActions(prev => [...prev, ...response.functionCalls!]);
       }
@@ -274,8 +272,13 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
           <div className="h-40"></div>
         </div>
 
-        {/* Input */}
-        <div className="px-6 pt-6 pb-20 md:pb-10 bg-[#0A0F1E] border-t border-white/5 relative z-20">
+        {/* Input - AJUSTADO PARA EVITAR SOLAPAMIENTO */}
+        <div 
+          className="px-6 pt-6 bg-[#0A0F1E] border-t border-white/5 relative z-20"
+          style={{ 
+            paddingBottom: 'calc(env(safe-area-inset-bottom, 24px) + 2rem)' 
+          }}
+        >
           <form onSubmit={handleSend} className="relative flex items-center gap-3">
             <div className="flex-1 relative">
                 <input 
