@@ -148,9 +148,11 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-end md:justify-center p-0 md:p-4">
+      {/* Fondo con blur que cubre todo */}
       <div className="absolute inset-0 bg-black/95 backdrop-blur-2xl animate-in fade-in" onClick={onClose}></div>
       
-      <div className="relative w-full max-w-2xl bg-[#0A0F1E] h-[95vh] md:h-[85vh] rounded-t-[48px] md:rounded-[48px] shadow-2xl flex flex-col border border-white/10 animate-in slide-in-from-bottom-10 overflow-hidden">
+      {/* El contenedor se ajusta para estar SIEMPRE sobre la barra de navegación en móviles */}
+      <div className="relative w-full max-w-2xl bg-[#0A0F1E] h-[calc(100dvh-110px)] md:h-[85vh] mb-[110px] md:mb-0 rounded-t-[48px] md:rounded-[48px] shadow-2xl flex flex-col border border-white/10 animate-in slide-in-from-bottom-10 overflow-hidden">
         
         {/* Cabecera del Panel */}
         <div className="p-5 pt-8 md:pt-6 border-b border-white/5 bg-[#131B2E] relative z-20">
@@ -272,13 +274,8 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
           <div className="h-40"></div>
         </div>
 
-        {/* Input - AJUSTADO PARA EVITAR SOLAPAMIENTO */}
-        <div 
-          className="px-6 pt-6 bg-[#0A0F1E] border-t border-white/5 relative z-20"
-          style={{ 
-            paddingBottom: 'calc(env(safe-area-inset-bottom, 24px) + 2rem)' 
-          }}
-        >
+        {/* Input - Siempre visible sobre la barra de navegación */}
+        <div className="px-6 py-6 bg-[#0A0F1E] border-t border-white/5 relative z-20 pb-[env(safe-area-inset-bottom,20px)]">
           <form onSubmit={handleSend} className="relative flex items-center gap-3">
             <div className="flex-1 relative">
                 <input 

@@ -31,7 +31,7 @@ const INITIAL_STATE: AppState = {
   ],
   tasks: [],
   projects: [],
-  coachMessages: {}, // Registro de historiales por CoachMode
+  coachMessages: {}, 
   notificationsEnabled: false,
   emailRelayEnabled: false,
   emailRelayAddress: ""
@@ -53,7 +53,6 @@ const App: React.FC = () => {
         setSyncStatus('loading');
         const cloudData = await loadUserData(currentUser.uid);
         if (cloudData) {
-            // Aseguramos que coachMessages sea un objeto
             const data = cloudData as AppState;
             if (!data.coachMessages || typeof data.coachMessages !== 'object') {
                 data.coachMessages = {};
@@ -152,37 +151,41 @@ const App: React.FC = () => {
   if (!user) return <AuthView />;
 
   return (
-    <Layout 
-      activeView={activeView} 
-      setView={setActiveView} 
-      onOpenCoach={() => setIsCoachOpen(!isCoachOpen)} 
-      syncStatus={syncStatus} 
-      onReset={() => window.location.reload()}
-      theme={state.theme || 'dark'}
-      toggleTheme={() => updateState(prev => ({ ...prev, theme: prev.theme === 'light' ? 'dark' : 'light' }))}
-    >
-      {activeView === 'COMPASS' && (
-        <CompassView 
-          state={state} 
-          userEmail={user.email} 
-          onLogout={handleLogout} 
-          onPurgeExecution={() => updateState(prev => ({ ...prev, tasks: [], projects: [] }))}
-          updateMission={(text) => updateState(prev => ({...prev, mission: {text, updatedAt: Date.now()}}))} 
-          updateUserName={(name) => updateState(prev => ({ ...prev, userName: name }))} 
-          addRole={(role) => updateState(prev => ({...prev, roles: [...prev.roles, role]}))} 
-          deleteRole={(id) => updateState(prev => ({...prev, roles: prev.roles.filter(r => r.id !== id)}))} 
-          updateRole={(id, updates) => updateState(prev => ({...prev, roles: prev.roles.map(r => r.id === id ? {...r, ...updates, updatedAt: Date.now()} : r)}))} 
-          updateRoleGoal={(id, goal) => updateState(prev => ({...prev, roles: prev.roles.map(r => r.id === id ? {...r, goal, updatedAt: Date.now()} : r)}))} 
-          setView={setActiveView} 
-          syncStatus={syncStatus}
-          updateNotifications={(enabled) => updateState(prev => ({ ...prev, notificationsEnabled: enabled }))}
-          updateEmailRelay={(enabled, address) => updateState(prev => ({ ...prev, emailRelayEnabled: enabled, emailRelayAddress: address }))}
-        />
-      )}
-      {activeView === 'PLANNER' && <PlannerView state={state} addTask={addTask} updateTask={updateTask} toggleTask={toggleTask} moveTask={moveTask} deleteTask={deleteTask} currentWeekOffset={currentWeekOffset} setCurrentWeekOffset={setCurrentWeekOffset} />}
-      {activeView === 'MATRIX' && <MatrixView state={state} updateQuadrant={updateQuadrant} addTask={addTask} updateTask={updateTask} toggleTask={toggleTask} moveTask={moveTask} currentWeekOffset={currentWeekOffset} setCurrentWeekOffset={setCurrentWeekOffset} />}
-      {activeView === 'PROJECTS' && <ProjectsView state={state} addProject={addProject} updateProject={updateProject} deleteProject={deleteProject} addTask={addTask} scheduleProjectTask={scheduleProjectTask} />}
-      {activeView === 'METHODOLOGY' && <MethodologyView setView={setActiveView} />}
+    <>
+      <Layout 
+        activeView={activeView} 
+        setView={setActiveView} 
+        onOpenCoach={() => setIsCoachOpen(!isCoachOpen)} 
+        syncStatus={syncStatus} 
+        onReset={() => window.location.reload()}
+        theme={state.theme || 'dark'}
+        toggleTheme={() => updateState(prev => ({ ...prev, theme: prev.theme === 'light' ? 'dark' : 'light' }))}
+      >
+        {activeView === 'COMPASS' && (
+          <CompassView 
+            state={state} 
+            userEmail={user.email} 
+            onLogout={handleLogout} 
+            onPurgeExecution={() => updateState(prev => ({ ...prev, tasks: [], projects: [] }))}
+            updateMission={(text) => updateState(prev => ({...prev, mission: {text, updatedAt: Date.now()}}))} 
+            updateUserName={(name) => updateState(prev => ({ ...prev, userName: name }))} 
+            addRole={(role) => updateState(prev => ({...prev, roles: [...prev.roles, role]}))} 
+            deleteRole={(id) => updateState(prev => ({...prev, roles: prev.roles.filter(r => r.id !== id)}))} 
+            updateRole={(id, updates) => updateState(prev => ({...prev, roles: prev.roles.map(r => r.id === id ? {...r, ...updates, updatedAt: Date.now()} : r)}))} 
+            updateRoleGoal={(id, goal) => updateState(prev => ({...prev, roles: prev.roles.map(r => r.id === id ? {...r, goal, updatedAt: Date.now()} : r)}))} 
+            setView={setActiveView} 
+            syncStatus={syncStatus}
+            updateNotifications={(enabled) => updateState(prev => ({ ...prev, notificationsEnabled: enabled }))}
+            updateEmailRelay={(enabled, address) => updateState(prev => ({ ...prev, emailRelayEnabled: enabled, emailRelayAddress: address }))}
+          />
+        )}
+        {activeView === 'PLANNER' && <PlannerView state={state} addTask={addTask} updateTask={updateTask} toggleTask={toggleTask} moveTask={moveTask} deleteTask={deleteTask} currentWeekOffset={currentWeekOffset} setCurrentWeekOffset={setCurrentWeekOffset} />}
+        {activeView === 'MATRIX' && <MatrixView state={state} updateQuadrant={updateQuadrant} addTask={addTask} updateTask={updateTask} toggleTask={toggleTask} moveTask={moveTask} currentWeekOffset={currentWeekOffset} setCurrentWeekOffset={setCurrentWeekOffset} />}
+        {activeView === 'PROJECTS' && <ProjectsView state={state} addProject={addProject} updateProject={updateProject} deleteProject={deleteProject} addTask={addTask} scheduleProjectTask={scheduleProjectTask} />}
+        {activeView === 'METHODOLOGY' && <MethodologyView setView={setActiveView} />}
+      </Layout>
+
+      {/* El panel se mueve fuera para tener z-index global y evitar solapamientos */}
       <AICoachPanel 
         isOpen={isCoachOpen} 
         onClose={() => setIsCoachOpen(false)} 
@@ -205,7 +208,7 @@ const App: React.FC = () => {
             } 
         }))} 
       />
-    </Layout>
+    </>
   );
 };
 
