@@ -61,7 +61,7 @@ const CompassView: React.FC<CompassViewProps> = ({ state, userEmail, onLogout, o
       updateNotifications(true);
       new Notification("Sincronía Activada", {
         body: "Recibirás alertas de tus objetivos en tiempo real.",
-        icon: "https://cdn-icons-png.flaticon.com/512/3239/3239044.png"
+        icon: "https://cdn-icons-png.flaticon.com/512/8618/8618881.png"
       });
     } else {
       updateNotifications(false);

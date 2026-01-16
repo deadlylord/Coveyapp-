@@ -94,7 +94,7 @@ const App: React.FC = () => {
         if (state.notificationsEnabled && "Notification" in window && Notification.permission === "granted") {
           new Notification(`Core Assist: Objetivo Activo`, {
             body: `Iniciando: ${upcomingTask.title}`,
-            icon: "https://cdn-icons-png.flaticon.com/512/3239/3239044.png"
+            icon: "https://cdn-icons-png.flaticon.com/512/8618/8618881.png"
           });
         }
       }
