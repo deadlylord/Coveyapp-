@@ -10,10 +10,8 @@ const getAI = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-// Utilidad para extraer JSON robusto de la respuesta
 const extractJSON = (text: string) => {
     try {
-        // Limpiar el texto de posibles bloques de código markdown
         const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const start = cleanText.indexOf('{');
         const end = cleanText.lastIndexOf('}');
@@ -30,13 +28,13 @@ const createTaskTool: FunctionDeclaration = {
   name: 'crear_tarea',
   parameters: {
     type: Type.OBJECT,
-    description: 'Sugiere crear una nueva tarea en la agenda del usuario.',
+    description: 'Crea una nueva tarea en la agenda del usuario.',
     properties: {
       title: { type: Type.STRING, description: 'Título de la tarea' },
       roleId: { type: Type.STRING, description: 'ID del rol asociado' },
-      quadrant: { type: Type.STRING, description: 'Cuadrante de Eisenhower: I, II, III o IV' },
+      quadrant: { type: Type.STRING, description: 'Cuadrante: I, II, III o IV' },
       day: { type: Type.NUMBER, description: 'Día de la semana (0=Lun, 6=Dom). null para Arena.' },
-      time: { type: Type.STRING, description: 'Hora en formato HH:MM opcional' }
+      time: { type: Type.STRING, description: 'Hora HH:MM' }
     },
     required: ['title', 'roleId', 'quadrant'],
   },
@@ -46,7 +44,7 @@ const createProjectTool: FunctionDeclaration = {
   name: 'crear_proyecto',
   parameters: {
     type: Type.OBJECT,
-    description: 'Sugiere crear un nuevo proyecto estratégico.',
+    description: 'Crea un nuevo proyecto estratégico.',
     properties: {
       title: { type: Type.STRING, description: 'Nombre del proyecto' },
       description: { type: Type.STRING, description: 'Objetivo y alcance' },
@@ -56,20 +54,24 @@ const createProjectTool: FunctionDeclaration = {
   },
 };
 
-const getSystemInstruction = (mode: CoachMode) => {
-  const base = `Eres Core Assist (V8.0 NEURAL ARCHITECT). Tu misión es optimizar la arquitectura de vida y negocio mediante el principio 80/20.`;
+const getSystemInstruction = (mode: CoachMode, userName: string) => {
+  const base = `Eres Core Assist (V8.6 NEURAL ARCHITECT). Tu misión es ser el aliado estratégico personal de ${userName}.`;
+  
   const modes: Record<CoachMode, string> = {
-    STRATEGIST: `${base} Modo: Estratega Core. Prioriza Q2 y eficiencia operativa.`,
-    BUSINESS_OWNER: `${base} Modo: Arquitecto de Negocios. Enfócate en ROI, escalabilidad y delegación.`,
-    ZEN_ENERGY: `${base} Modo: Bio-Hacker. Prioriza la energía y el foco cognitivo.`,
-    SOCRATIC: `${base} Modo: Oráculo Socrático. Claridad mediante preguntas críticas.`,
+    STRATEGIST: `${base} Modo: Arquitecto Central. Ayuda a ${userName} a ver el panorama completo y priorizar lo que realmente mueve la aguja.`,
+    FINANCIAL: `${base} Modo: Asesor Financiero. Ayuda a ${userName} a maximizar su ROI, flujo de caja y libertad financiera con sabiduría.`,
+    BUSINESS_OWNER: `${base} Modo: Arquitecto de Negocios. Enfócate en sistemas y escalabilidad para liberar el tiempo de ${userName}.`,
+    ZEN_ENERGY: `${base} Modo: Bio-Hacker. Asegúrate de que ${userName} mantenga su energía biológica al máximo.`,
+    SOCRATIC: `${base} Modo: Oráculo Socrático. Desafía los pensamientos de ${userName} con preguntas profundas para encontrar claridad.`,
   };
+
   return `${modes[mode] || modes.STRATEGIST}
 
-REGLAS DE ORO:
-1. SIEMPRE pida confirmación antes de llamar a herramientas de creación. Di algo como "¿Deseas que agende esta tarea por ti?".
-2. Solo usa las herramientas si el usuario lo solicita explícitamente o confirma tu sugerencia.
-3. Sé directo. Formato Markdown.`;
+DIRECTIVAS DE INTERACCIÓN (CRÍTICAS):
+1. **TONO HUMANO Y CERCANO**: Háblale a ${userName} de forma empática, profesional pero cálida. Usa su nombre frecuentemente en la conversación. No seas un robot frío; sé un mentor que se preocupa por su éxito.
+2. **PROTOCOLO DE PERMISO**: NUNCA utilices las herramientas 'crear_tarea' o 'crear_proyecto' sin antes preguntar: "${userName}, ¿quieres que agende esta tarea por ti?" o algo similar. Solo debes llamar a la herramienta cuando ${userName} te dé su aprobación explícita.
+3. **CONFIRMACIÓN**: Una vez que ${userName} acepte y uses la herramienta, valida la acción en tu respuesta (ej: "Perfecto, ${userName}, ya he agendado esa prioridad para ti").
+4. **ESTRUCTURA**: Usa **negritas** para énfasis y listas claras. Mantén la brevedad ejecutiva pero con calidez humana.`;
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
@@ -83,22 +85,19 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Pr
 }
 
 export async function getCoachResponse(message: string, state: AppState) {
-  const completedTasks = state.tasks
-    .filter(t => t.completed)
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .slice(0, 10)
-    .map(t => `- ${t.title}`)
-    .join('\n');
+  const currentHistory = state.coachMessages[state.coachMode] || [];
+  const historyText = currentHistory.map(m => `${m.role === 'user' ? 'Usuario' : 'Core'}: ${m.text}`).join('\n');
+  const rolesContext = state.roles.map(r => `ID: ${r.id}, Nombre: ${r.name}`).join(' | ');
 
   return withRetry(async () => {
     try {
       const ai = getAI();
       return await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: [{ parts: [{ text: `Usuario: "${message}". Contexto: Roles: ${state.roles.map(r => r.name).join(', ')}. Logros: ${completedTasks}` }] }],
+        contents: [{ parts: [{ text: `USUARIO: ${state.userName}\nROLES DISPONIBLES: ${rolesContext}\n\nCONTEXTO:\n${historyText}\n\nMENSAJE DE ${state.userName}: "${message}"` }] }],
         config: { 
-          systemInstruction: getSystemInstruction(state.coachMode),
-          temperature: 0.7,
+          systemInstruction: getSystemInstruction(state.coachMode, state.userName),
+          temperature: 0.8,
           tools: [{ functionDeclarations: [createTaskTool, createProjectTool] }]
         }
       });
@@ -112,9 +111,9 @@ export async function breakdownProject(project: Project) {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: [{ parts: [{ text: `Analiza y desglosa este proyecto en pasos lógicos. Proyecto: ${project.title}. Descripción: ${project.description}` }] }],
+        contents: [{ parts: [{ text: `Desglosa este proyecto estratégicamente: ${project.title}. Objetivo: ${project.description}` }] }],
         config: { 
-          systemInstruction: "Eres un gestor de proyectos experto. Desglosa el proyecto en pasos accionables SMART.",
+          systemInstruction: "Eres un gestor de proyectos experto. Desglosa en pasos SMART.",
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -149,9 +148,9 @@ export async function improveProjectObjective(title: string, description: string
         const ai = getAI();
         const response = await ai.models.generateContent({
           model: 'gemini-3-flash-preview',
-          contents: [{ parts: [{ text: `Optimiza este objetivo de proyecto para el rol: "${roleName}". Título: "${title}". Descripción: "${description}".` }] }],
+          contents: [{ parts: [{ text: `Refina este objetivo para el rol "${roleName}". Título: "${title}". Descripción: "${description}".` }] }],
           config: { 
-              systemInstruction: `Refina objetivos para que sean de alto impacto.`,
+              systemInstruction: `Crea objetivos potentes.`,
               responseMimeType: "application/json",
               responseSchema: {
                   type: Type.OBJECT,
@@ -165,8 +164,28 @@ export async function improveProjectObjective(title: string, description: string
         });
         return extractJSON(response.text || '{}');
       } catch (error) { 
-          console.error("Error in improveProjectObjective:", error);
           return { title, description }; 
       }
     });
+}
+
+export async function generateEmailBriefing(state: AppState) {
+  const pendingBigRocks = state.tasks
+    .filter(t => !t.completed && t.isBigRock)
+    .map(t => `- ${t.title} (${t.time || 'Bloque'})`)
+    .join('\n');
+
+  return withRetry(async () => {
+    try {
+      const ai = getAI();
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [{ parts: [{ text: `Genera un Briefing de impacto para ${state.userName}. Misión: ${state.mission.text}. Tareas: ${pendingBigRocks}` }] }],
+        config: { systemInstruction: `Asistente de elite para ${state.userName}. Tono cercano y motivador.` }
+      });
+      return response.text;
+    } catch (error) {
+      return `Sincronía de Core Assist activa para ${state.userName}.`;
+    }
+  });
 }

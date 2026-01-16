@@ -8,7 +8,7 @@ import ProjectsView from './components/ProjectsView';
 import MethodologyView from './components/MethodologyView';
 import AICoachPanel from './components/AICoachPanel';
 import AuthView from './components/AuthView';
-import { AppState, ViewType, Task, Role, Quadrant, SyncStatus, Project, CoachMode, AppTheme } from './types';
+import { AppState, ViewType, Task, Role, Quadrant, SyncStatus, Project, CoachMode, AppTheme, ChatMessage } from './types';
 import { saveUserData, loadUserData, auth, onAuthStateChanged, signOut } from './firebase';
 
 const MOTIVATIONAL_PHRASES = [
@@ -31,8 +31,10 @@ const INITIAL_STATE: AppState = {
   ],
   tasks: [],
   projects: [],
-  coachMessages: [],
-  notificationsEnabled: false
+  coachMessages: {}, // Registro de historiales por CoachMode
+  notificationsEnabled: false,
+  emailRelayEnabled: false,
+  emailRelayAddress: ""
 };
 
 const App: React.FC = () => {
@@ -50,7 +52,14 @@ const App: React.FC = () => {
       if (currentUser) {
         setSyncStatus('loading');
         const cloudData = await loadUserData(currentUser.uid);
-        if (cloudData) setState(cloudData as AppState);
+        if (cloudData) {
+            // Aseguramos que coachMessages sea un objeto
+            const data = cloudData as AppState;
+            if (!data.coachMessages || typeof data.coachMessages !== 'object') {
+                data.coachMessages = {};
+            }
+            setState({ ...INITIAL_STATE, ...data } as AppState);
+        }
         else await saveUserData(currentUser.uid, INITIAL_STATE);
         setUser(currentUser);
         setSyncStatus('synced');
@@ -64,9 +73,8 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Lógica de Notificaciones de Tareas
   useEffect(() => {
-    if (!state.notificationsEnabled) return;
+    if (!state.notificationsEnabled && !state.emailRelayEnabled) return;
 
     const checkTasksInterval = setInterval(() => {
       const now = new Date();
@@ -83,17 +91,17 @@ const App: React.FC = () => {
       );
 
       if (upcomingTask) {
-        if ("Notification" in window && Notification.permission === "granted") {
+        if (state.notificationsEnabled && "Notification" in window && Notification.permission === "granted") {
           new Notification(`Core Assist: Objetivo Activo`, {
             body: `Iniciando: ${upcomingTask.title}`,
             icon: "https://cdn-icons-png.flaticon.com/512/3239/3239044.png"
           });
         }
       }
-    }, 60000); // Revisar cada minuto
+    }, 60000);
 
     return () => clearInterval(checkTasksInterval);
-  }, [state.tasks, state.notificationsEnabled]);
+  }, [state.tasks, state.notificationsEnabled, state.emailRelayEnabled, state.emailRelayAddress]);
 
   useEffect(() => {
     if (state.theme === 'light') {
@@ -115,17 +123,7 @@ const App: React.FC = () => {
 
   const updateState = (updater: (prev: AppState) => AppState) => setState(prev => updater(prev));
 
-  const toggleTheme = () => {
-    updateState(prev => ({ ...prev, theme: prev.theme === 'light' ? 'dark' : 'light' }));
-  };
-
   const handleLogout = async () => { if (confirm("¿Cerrar sesión?")) await signOut(auth); };
-
-  const purgeExecution = () => {
-    if (confirm("¿Confirmas la purga total de Tareas y Proyectos? (Misión y Roles se mantendrán)")) {
-      updateState(prev => ({ ...prev, tasks: [], projects: [] }));
-    }
-  };
 
   const addTask = (task: Task) => updateState(prev => ({ ...prev, tasks: [...prev.tasks, task] }));
   const updateTask = (id: string, updates: Partial<Task>) => updateState(prev => ({ ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, ...updates, updatedAt: Date.now() } : t) }));
@@ -161,14 +159,14 @@ const App: React.FC = () => {
       syncStatus={syncStatus} 
       onReset={() => window.location.reload()}
       theme={state.theme || 'dark'}
-      toggleTheme={toggleTheme}
+      toggleTheme={() => updateState(prev => ({ ...prev, theme: prev.theme === 'light' ? 'dark' : 'light' }))}
     >
       {activeView === 'COMPASS' && (
         <CompassView 
           state={state} 
           userEmail={user.email} 
           onLogout={handleLogout} 
-          onPurgeExecution={purgeExecution}
+          onPurgeExecution={() => updateState(prev => ({ ...prev, tasks: [], projects: [] }))}
           updateMission={(text) => updateState(prev => ({...prev, mission: {text, updatedAt: Date.now()}}))} 
           updateUserName={(name) => updateState(prev => ({ ...prev, userName: name }))} 
           addRole={(role) => updateState(prev => ({...prev, roles: [...prev.roles, role]}))} 
@@ -178,13 +176,35 @@ const App: React.FC = () => {
           setView={setActiveView} 
           syncStatus={syncStatus}
           updateNotifications={(enabled) => updateState(prev => ({ ...prev, notificationsEnabled: enabled }))}
+          updateEmailRelay={(enabled, address) => updateState(prev => ({ ...prev, emailRelayEnabled: enabled, emailRelayAddress: address }))}
         />
       )}
       {activeView === 'PLANNER' && <PlannerView state={state} addTask={addTask} updateTask={updateTask} toggleTask={toggleTask} moveTask={moveTask} deleteTask={deleteTask} currentWeekOffset={currentWeekOffset} setCurrentWeekOffset={setCurrentWeekOffset} />}
       {activeView === 'MATRIX' && <MatrixView state={state} updateQuadrant={updateQuadrant} addTask={addTask} updateTask={updateTask} toggleTask={toggleTask} moveTask={moveTask} currentWeekOffset={currentWeekOffset} setCurrentWeekOffset={setCurrentWeekOffset} />}
       {activeView === 'PROJECTS' && <ProjectsView state={state} addProject={addProject} updateProject={updateProject} deleteProject={deleteProject} addTask={addTask} scheduleProjectTask={scheduleProjectTask} />}
       {activeView === 'METHODOLOGY' && <MethodologyView setView={setActiveView} />}
-      <AICoachPanel isOpen={isCoachOpen} onClose={() => setIsCoachOpen(false)} state={state} updateMode={(mode) => updateState(prev => ({ ...prev, coachMode: mode }))} onAddTask={addTask} onAddProject={addProject} onAddMessage={(msg) => updateState(prev => ({ ...prev, coachMessages: [...prev.coachMessages, msg] }))} onClearMessages={() => updateState(prev => ({ ...prev, coachMessages: [] }))} />
+      <AICoachPanel 
+        isOpen={isCoachOpen} 
+        onClose={() => setIsCoachOpen(false)} 
+        state={state} 
+        updateMode={(mode) => updateState(prev => ({ ...prev, coachMode: mode }))} 
+        onAddTask={addTask} 
+        onAddProject={addProject} 
+        onAddMessage={(mode, msg) => updateState(prev => ({ 
+            ...prev, 
+            coachMessages: {
+                ...prev.coachMessages,
+                [mode]: [...(prev.coachMessages[mode] || []), msg]
+            } 
+        }))} 
+        onClearMessages={(mode) => updateState(prev => ({ 
+            ...prev, 
+            coachMessages: {
+                ...prev.coachMessages,
+                [mode]: []
+            } 
+        }))} 
+      />
     </Layout>
   );
 };

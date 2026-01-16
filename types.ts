@@ -62,7 +62,7 @@ export type ChatMessage = {
   timestamp: number;
 };
 
-export type CoachMode = 'STRATEGIST' | 'SOCRATIC' | 'BUSINESS_OWNER' | 'ZEN_ENERGY';
+export type CoachMode = 'STRATEGIST' | 'FINANCIAL' | 'SOCRATIC' | 'BUSINESS_OWNER' | 'ZEN_ENERGY';
 
 export type AppTheme = 'dark' | 'light';
 
@@ -75,8 +75,10 @@ export type AppState = {
   roles: Role[];
   tasks: Task[];
   projects: Project[];
-  coachMessages: ChatMessage[];
+  coachMessages: Record<string, ChatMessage[]>; // Segmentado por CoachMode
   notificationsEnabled?: boolean;
+  emailRelayEnabled?: boolean;
+  emailRelayAddress?: string;
   version?: number;
 };
 

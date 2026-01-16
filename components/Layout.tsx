@@ -22,15 +22,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onOpenCo
           <div className="absolute bottom-[5%] right-[5%] w-[40%] h-[40%] bg-blue-600/5 rounded-full blur-[160px]"></div>
       </div>
 
-      <header className={`px-6 pt-12 pb-6 flex justify-between items-center relative z-20 border-b transition-all duration-500 ${
+      <header className={`px-6 pt-8 pb-3 flex justify-between items-center relative z-20 border-b transition-all duration-500 ${
         theme === 'dark' 
           ? 'border-white/5 bg-[#0A0F1E]/60 backdrop-blur-xl' 
           : 'border-slate-200 bg-white/90 backdrop-blur-xl shadow-sm'
       }`}>
         <div className="flex flex-col">
-            <div className="flex items-center gap-4">
-              <div className="w-1.5 h-8 bg-[#BC00FF] shadow-[0_0_15px_#BC00FF] rounded-full"></div>
-              <h1 className={`text-2xl font-black tracking-tighter uppercase italic leading-none ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+            <div className="flex items-center gap-3">
+              <div className="w-1 h-5 bg-[#BC00FF] shadow-[0_0_10px_#BC00FF] rounded-full"></div>
+              <h1 className={`text-lg font-black tracking-tighter uppercase italic leading-none ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
                 {activeView === 'PLANNER' && 'Agenda'}
                 {activeView === 'MATRIX' && 'Enfoque'}
                 {activeView === 'COMPASS' && 'Propósito'}
@@ -38,14 +38,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onOpenCo
                 {activeView === 'METHODOLOGY' && 'Sistemas'}
               </h1>
             </div>
-            <div className="flex items-center gap-2 mt-2 px-1">
-              <span className="mono text-[8px] font-black text-slate-500 uppercase tracking-[0.4em]">
-                {syncStatus === 'syncing' ? 'Transmitting Data...' : 'Anonymous Operative'}
+            <div className="flex items-center gap-1.5 mt-1 px-1">
+              <span className="mono text-[6px] font-black text-slate-500 uppercase tracking-[0.3em]">
+                {syncStatus === 'syncing' ? 'Sincronizando...' : 'Sistema Activo'}
               </span>
-              <div className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                  syncStatus === 'synced' ? 'bg-emerald-400 shadow-[0_0_10px_#00FF88]' : 
-                  syncStatus === 'syncing' ? 'bg-purple-400 shadow-[0_0_15px_#BC00FF] animate-pulse scale-125' :
-                  syncStatus === 'local' ? 'bg-amber-400 shadow-[0_0_10px_orange]' : 
+              <div className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                  syncStatus === 'synced' ? 'bg-emerald-400 shadow-[0_0_8px_#00FF88]' : 
+                  syncStatus === 'syncing' ? 'bg-purple-400 shadow-[0_0_12px_#BC00FF] animate-pulse' :
+                  syncStatus === 'local' ? 'bg-amber-400 shadow-[0_0_8px_orange]' : 
                   'bg-red-400'
               }`}></div>
             </div>
@@ -54,21 +54,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onOpenCo
         <div className="flex items-center gap-2">
             <button 
                 onClick={toggleTheme}
-                title="Alternar Modo Visual"
-                className="w-11 h-11 flex items-center justify-center bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all active:scale-90"
+                className="w-9 h-9 flex items-center justify-center bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all active:scale-90"
             >
                 {theme === 'dark' ? (
-                  <svg className="w-5 h-5 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 5a7 7 0 100 14 7 7 0 000-14z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                  <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 5a7 7 0 100 14 7 7 0 000-14z" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
                 ) : (
-                  <svg className="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+                  <svg className="w-4 h-4 text-slate-400" fill="currentColor" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
                 )}
             </button>
             <button 
                 onClick={onReset}
-                title="Sincronización Forzada"
-                className="w-11 h-11 flex items-center justify-center bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all active:scale-90 group"
+                className="w-9 h-9 flex items-center justify-center bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all active:scale-90 group"
             >
-                <svg className="w-5 h-5 text-slate-400 group-hover:rotate-180 transition-transform duration-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round"/></svg>
+                <svg className="w-4 h-4 text-slate-400 group-hover:rotate-180 transition-transform duration-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round"/></svg>
             </button>
         </div>
       </header>
