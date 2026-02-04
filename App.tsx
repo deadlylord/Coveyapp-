@@ -34,7 +34,8 @@ const INITIAL_STATE: AppState = {
   coachMessages: {}, 
   notificationsEnabled: false,
   emailRelayEnabled: false,
-  emailRelayAddress: ""
+  emailRelayAddress: "",
+  version: 8.7
 };
 
 const App: React.FC = () => {
@@ -185,7 +186,6 @@ const App: React.FC = () => {
         {activeView === 'METHODOLOGY' && <MethodologyView setView={setActiveView} />}
       </Layout>
 
-      {/* El panel se mueve fuera para tener z-index global y evitar solapamientos */}
       <AICoachPanel 
         isOpen={isCoachOpen} 
         onClose={() => setIsCoachOpen(false)} 

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { AppState, Project, Task, ProjectStep } from '../types';
+import { AppState, Project, Task, ProjectStep, BusinessArea } from '../types';
 import { breakdownProject, improveProjectObjective } from '../geminiService';
 import { DAYS_OF_WEEK } from '../constants';
 
@@ -13,15 +13,25 @@ interface ProjectsViewProps {
   scheduleProjectTask: (projectId: string, stepId: string, task: Task) => void;
 }
 
+const BUSINESS_AREAS: { id: BusinessArea; label: string; icon: string; color: string }[] = [
+  { id: 'GENERAL', label: 'Estrategia', icon: '🎯', color: 'text-purple-400' },
+  { id: 'FINANCE', label: 'Finanzas', icon: '💰', color: 'text-emerald-400' },
+  { id: 'MARKETING', label: 'Marketing', icon: '📣', color: 'text-rose-400' },
+  { id: 'ACCOUNTING', label: 'Contabilidad', icon: '📝', color: 'text-amber-400' },
+  { id: 'OPERATIONS', label: 'Operaciones', icon: '⚙️', color: 'text-blue-400' },
+  { id: 'SALES', label: 'Ventas', icon: '🤝', color: 'text-cyan-400' },
+];
+
 const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updateProject, deleteProject, addTask, scheduleProjectTask }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [improvingProject, setImprovingProject] = useState(false);
   const [schedulingStep, setSchedulingStep] = useState<{ projectId: string, stepId: string } | null>(null);
   const [editingProject, setEditingProject] = useState<string | null>(null);
+  const [selectedAreaFilter, setSelectedAreaFilter] = useState<BusinessArea | 'ALL'>('ALL');
   
   const [scheduleConfig, setScheduleConfig] = useState<{ weekOffset: number, day: string }>({ weekOffset: 0, day: 'arena' });
-  const [formData, setFormData] = useState({ title: '', description: '', roleId: state.roles[0]?.id || '' });
+  const [formData, setFormData] = useState({ title: '', description: '', roleId: state.roles[0]?.id || '', area: 'GENERAL' as BusinessArea });
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +41,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
       title: formData.title,
       description: formData.description,
       roleId: formData.roleId,
+      area: formData.area,
       targetSessions: 10,
       completedSessions: 0,
       steps: [],
@@ -38,7 +49,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
     };
     addProject(newProj);
     setIsAdding(false);
-    setFormData({ title: '', description: '', roleId: state.roles[0]?.id || '' });
+    setFormData({ title: '', description: '', roleId: state.roles[0]?.id || '', area: 'GENERAL' });
   };
 
   const handleImprove = async (isNew: boolean, projectId?: string) => {
@@ -46,6 +57,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
     const currentTitle = isNew ? formData.title : currentProj?.title;
     const currentDesc = isNew ? formData.description : currentProj?.description;
     const currentRoleId = isNew ? formData.roleId : currentProj?.roleId;
+    const currentArea = isNew ? formData.area : currentProj?.area;
 
     const role = state.roles.find(r => r.id === currentRoleId);
     const roleName = role?.name || "General";
@@ -57,7 +69,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
 
     setImprovingProject(true);
     try {
-      const improved = await improveProjectObjective(currentTitle, currentDesc || '', roleName);
+      const improved = await improveProjectObjective(currentTitle, currentDesc || '', roleName, currentArea || 'GENERAL');
       if (isNew) {
         setFormData(prev => ({ ...prev, title: improved.title, description: improved.description }));
       } else if (projectId) {
@@ -118,12 +130,16 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
     setSchedulingStep(null);
   };
 
+  const filteredProjects = selectedAreaFilter === 'ALL' 
+    ? state.projects 
+    : state.projects.filter(p => p.area === selectedAreaFilter);
+
   return (
     <div className="px-6 space-y-8 pb-32">
       <div className="flex justify-between items-end">
         <div>
-            <h2 className="text-4xl font-black tracking-tighter uppercase italic text-white leading-none">Proyectos</h2>
-            <p className="mono text-[8px] font-bold text-purple-400 uppercase tracking-[0.3em] mt-2">Arquitectura de Negocios</p>
+            <h2 className="text-4xl font-black tracking-tighter uppercase italic text-white leading-none">Negocios</h2>
+            <p className="mono text-[8px] font-bold text-purple-400 uppercase tracking-[0.3em] mt-2">Arquitectura Empresarial Integral</p>
         </div>
         <button 
           onClick={() => setIsAdding(true)}
@@ -131,6 +147,26 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4.5v15m7.5-7.5h-15" /></svg>
         </button>
+      </div>
+
+      {/* Area Filter Selector */}
+      <div className="flex gap-2 overflow-x-auto scroll-hide py-2">
+          <button 
+            onClick={() => setSelectedAreaFilter('ALL')}
+            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all whitespace-nowrap ${selectedAreaFilter === 'ALL' ? 'bg-[#BC00FF] border-[#BC00FF] text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}
+          >
+            Todos
+          </button>
+          {BUSINESS_AREAS.map(area => (
+            <button 
+                key={area.id}
+                onClick={() => setSelectedAreaFilter(area.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all whitespace-nowrap ${selectedAreaFilter === area.id ? 'bg-[#BC00FF] border-[#BC00FF] text-white' : 'bg-white/5 border-white/10 text-slate-500'}`}
+            >
+                <span>{area.icon}</span>
+                <span>{area.label}</span>
+            </button>
+          ))}
       </div>
 
       {isAdding && (
@@ -142,15 +178,27 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
             </div>
           )}
           
-          <div className="space-y-1">
-            <label className="mono text-[7px] font-black text-slate-500 uppercase ml-2 tracking-widest">Esfera de Responsabilidad</label>
-            <select 
-              value={formData.roleId}
-              onChange={e => setFormData({...formData, roleId: e.target.value})}
-              className="w-full bg-black/40 border border-white/10 p-4 rounded-2xl text-sm text-white outline-none focus:border-[#BC00FF]"
-            >
-              {state.roles.map(r => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="mono text-[7px] font-black text-slate-500 uppercase ml-2 tracking-widest">Esfera de Rol</label>
+                <select 
+                  value={formData.roleId}
+                  onChange={e => setFormData({...formData, roleId: e.target.value})}
+                  className="w-full bg-black/40 border border-white/10 p-4 rounded-2xl text-sm text-white outline-none focus:border-[#BC00FF]"
+                >
+                  {state.roles.map(r => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="mono text-[7px] font-black text-slate-500 uppercase ml-2 tracking-widest">Área Crítica</label>
+                <select 
+                  value={formData.area}
+                  onChange={e => setFormData({...formData, area: e.target.value as BusinessArea})}
+                  className="w-full bg-black/40 border border-white/10 p-4 rounded-2xl text-sm text-white outline-none focus:border-[#BC00FF]"
+                >
+                  {BUSINESS_AREAS.map(a => <option key={a.id} value={a.id}>{a.icon} {a.label}</option>)}
+                </select>
+              </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -163,14 +211,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
             <button 
                 onClick={() => handleImprove(true)}
                 className="p-3 bg-[#BC00FF]/10 text-[#BC00FF] rounded-2xl border border-[#BC00FF]/20 hover:bg-[#BC00FF]/20 transition-all"
-                title="Mejorar con IA según Rol"
+                title="Mejorar con IA según Área"
             >
                 <span className="text-xl">✨</span>
             </button>
           </div>
 
           <textarea 
-            placeholder="Definición de impacto (qué quieres lograr y por qué)..."
+            placeholder="Definición de impacto (qué quieres lograr y por qué en esta área)..."
             className="w-full bg-white/5 border border-white/5 p-5 rounded-2xl text-sm outline-none text-slate-300 min-h-[100px] focus:border-[#BC00FF]/50"
             value={formData.description}
             onChange={e => setFormData({...formData, description: e.target.value})}
@@ -184,7 +232,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
 
       {/* Modal de Agendamiento */}
       {schedulingStep && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in">
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in">
               <div className="bg-[#131B2E] w-full max-w-sm rounded-[32px] p-8 border border-white/10 space-y-6">
                   <h3 className="text-xl font-black uppercase italic text-white tracking-tighter">Agenda Estratégica</h3>
                   <div className="space-y-4">
@@ -220,15 +268,24 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
       )}
 
       <div className="grid grid-cols-1 gap-6">
-        {state.projects.map(project => {
+        {filteredProjects.length === 0 && (
+            <div className="text-center py-20 opacity-30">
+                <p className="mono text-[10px] font-black uppercase tracking-widest">Sin proyectos vinculados en esta área.</p>
+            </div>
+        )}
+        {filteredProjects.map(project => {
           const role = state.roles.find(r => r.id === project.roleId);
+          const areaInfo = BUSINESS_AREAS.find(a => a.id === project.area) || BUSINESS_AREAS[0];
           return (
             <div key={project.id} className="bg-[#131B2E] p-6 rounded-[32px] border border-white/5 space-y-6 shadow-xl relative group overflow-hidden">
                 <div className="flex justify-between items-start">
                     <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-2xl">{role?.icon}</span>
-                            <span className="mono text-[8px] font-black uppercase text-purple-400 tracking-[0.3em]">{role?.name}</span>
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className={`px-3 py-1 rounded-full bg-white/5 border border-white/10 flex items-center gap-2`}>
+                                <span className="text-xs">{areaInfo.icon}</span>
+                                <span className={`mono text-[7px] font-black uppercase ${areaInfo.color} tracking-widest`}>{areaInfo.label}</span>
+                            </div>
+                            <span className="mono text-[7px] font-black uppercase text-slate-600 tracking-widest">| {role?.name}</span>
                         </div>
                         {editingProject === project.id ? (
                             <div className="space-y-4 relative">
@@ -238,15 +295,27 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
                                   </div>
                                 )}
                                 
-                                <div className="space-y-1">
-                                    <label className="mono text-[7px] font-black text-slate-600 uppercase ml-2 tracking-widest">Esfera de Responsabilidad</label>
-                                    <select 
-                                        value={project.roleId}
-                                        onChange={e => updateProject(project.id, { roleId: e.target.value })}
-                                        className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-xs text-white outline-none focus:border-[#BC00FF]"
-                                    >
-                                        {state.roles.map(r => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}
-                                    </select>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <label className="mono text-[7px] font-black text-slate-600 uppercase ml-2 tracking-widest">Rol Responsable</label>
+                                        <select 
+                                            value={project.roleId}
+                                            onChange={e => updateProject(project.id, { roleId: e.target.value })}
+                                            className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-xs text-white outline-none focus:border-[#BC00FF]"
+                                        >
+                                            {state.roles.map(r => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="mono text-[7px] font-black text-slate-600 uppercase ml-2 tracking-widest">Área Crítica</label>
+                                        <select 
+                                            value={project.area}
+                                            onChange={e => updateProject(project.id, { area: e.target.value as BusinessArea })}
+                                            className="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-xs text-white outline-none focus:border-[#BC00FF]"
+                                        >
+                                            {BUSINESS_AREAS.map(a => <option key={a.id} value={a.id}>{a.icon} {a.label}</option>)}
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div className="flex gap-2">
@@ -328,7 +397,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({ state, addProject, updatePr
                             <div className="w-3 h-3 border-2 border-[#BC00FF] border-t-transparent rounded-full animate-spin"></div>
                             <span>Estimando Estructura...</span>
                           </div>
-                        ) : project.steps.length === 0 ? 'Desglosar con IA 💠' : 'Regenerar OKRs y Timeline'}
+                        ) : project.steps.length === 0 ? `Desglosar con IA (${areaInfo.label}) 💠` : 'Regenerar OKRs y Timeline'}
                     </button>
                 </div>
             </div>

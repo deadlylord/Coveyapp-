@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
-import { AppState, Project, CoachMode, Task, Quadrant } from "./types";
+import { AppState, Project, CoachMode, Task, Quadrant, BusinessArea } from "./types";
 
 const getAI = () => {
   const apiKey = process.env.API_KEY;
@@ -48,40 +48,33 @@ const createProjectTool: FunctionDeclaration = {
     properties: {
       title: { type: Type.STRING, description: 'Nombre del proyecto' },
       description: { type: Type.STRING, description: 'Objetivo y alcance' },
-      roleId: { type: Type.STRING, description: 'ID del rol responsable' }
+      roleId: { type: Type.STRING, description: 'ID del rol responsable' },
+      area: { type: Type.STRING, description: 'Área: FINANCE, MARKETING, ACCOUNTING, OPERATIONS, SALES, GENERAL' }
     },
-    required: ['title', 'description', 'roleId'],
+    required: ['title', 'description', 'roleId', 'area'],
   },
 };
 
 const getSystemInstruction = (mode: CoachMode, userName: string) => {
-  const base = `Eres Core Assist (V8.6 NEURAL ARCHITECT). Tu misión es ser el aliado estratégico personal de ${userName}.`;
+  const base = `Eres Core Assist (V8.7 NEURAL ARCHITECT). Tu misión es ser el aliado estratégico personal de ${userName}.`;
   
   const modes: Record<CoachMode, string> = {
     STRATEGIST: `${base} Modo: Arquitecto Central. Ayuda a ${userName} a ver el panorama completo y priorizar lo que realmente mueve la aguja.`,
     FINANCIAL: `${base} Modo: Asesor Financiero. Ayuda a ${userName} a maximizar su ROI, flujo de caja y libertad financiera con sabiduría.`,
     BUSINESS_OWNER: `${base} Modo: Arquitecto de Negocios. Enfócate en sistemas y escalabilidad para liberar el tiempo de ${userName}.`,
     ZEN_ENERGY: `${base} Modo: Bio-Hacker. Asegúrate de que ${userName} mantenga su energía biológica al máximo.`,
-    SOCRATIC: `${base} Modo: Oráculo de Claridad (Inspirado en Brian Tracy & Psicología del Logro). Tu enfoque es la Ley del Control: ${userName} se siente feliz en la medida en que siente que tiene el control de su propia vida. Desafía el "viviendo por accidente" y empuja hacia la "planificación por diseño". Utiliza las 7 leyes mentales (Control, Causa y Efecto, Creencia, Expectativa, Atracción, Correspondencia y Sustitución) para cuestionar sus limitaciones y potenciar su autoconcepto.`,
+    SOCRATIC: `${base} Modo: Oráculo de Claridad. Tu enfoque es la Ley del Control y la planificación por diseño.`,
   };
 
   const modeInstruction = modes[mode] || modes.STRATEGIST;
 
-  const socraticAddon = mode === 'SOCRATIC' ? `
-ESPECÍFICO PARA ORÁCULO DE CLARIDAD:
-- Enfatiza la Responsabilidad Total: "Soy responsable". No permitas excusas.
-- Pregunta sobre el Autoconcepto: ¿Cómo se ve ${userName} a sí mismo en esta situación?
-- Usa la Ley de Sustitución: Si hay un pensamiento negativo, ayuda a ${userName} a sustituirlo por uno positivo y constructivo.
-- Claridad de Metas: Brian Tracy dice que "la claridad es el 80% del éxito". Si ${userName} es vago, exige precisión quirúrgica.` : '';
-
   return `${modeInstruction}
 
-DIRECTIVAS DE INTERACCIÓN (CRÍTICAS):
-1. **TONO HUMANO Y CERCANO**: Háblale a ${userName} de forma empática, profesional pero cálida. Usa su nombre frecuentemente en la conversación. No seas un robot frío; sé un mentor que se preocupa por su éxito.
-2. **PROTOCOLO DE PERMISO**: NUNCA utilices las herramientas 'crear_tarea' o 'crear_proyecto' sin antes preguntar: "${userName}, ¿quieres que agende esta tarea por ti?" o algo similar. Solo debes llamar a la herramienta cuando ${userName} te dé su aprobación explícita.
-3. **CONFIRMACIÓN**: Una vez que ${userName} acepte y uses la herramienta, valida la acción en tu respuesta (ej: "Perfecto, ${userName}, ya he agendado esa prioridad para ti").
-4. **ESTRUCTURA**: Usa **negritas** para énfasis y listas claras. Mantén la brevedad ejecutiva pero con calidez humana.
-${socraticAddon}`;
+DIRECTIVAS DE INTERACCIÓN:
+1. **TONO HUMANO**: Empático, profesional y cálido.
+2. **PROTOCOLO DE PERMISO**: Pide autorización antes de usar herramientas de creación.
+3. **HISTORIAL Y CONTEXTO**: Tienes acceso a todos los proyectos (Finanzas, Marketing, Contabilidad, etc.). Si el usuario menciona un tema, revisa cómo afecta a cada área y cita proyectos previos si son relevantes.
+4. **VISIÓN INTEGRAL**: Cuando propongas algo, considera el impacto cruzado (ej: cómo una campaña de marketing afecta el flujo de caja en finanzas).`;
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
@@ -98,13 +91,29 @@ export async function getCoachResponse(message: string, state: AppState) {
   const currentHistory = state.coachMessages[state.coachMode] || [];
   const historyText = currentHistory.map(m => `${m.role === 'user' ? 'Usuario' : 'Core'}: ${m.text}`).join('\n');
   const rolesContext = state.roles.map(r => `ID: ${r.id}, Nombre: ${r.name}`).join(' | ');
+  
+  // Historical context of projects and tasks
+  const projectHistory = state.projects.map(p => `PROYECTO [${p.area}]: ${p.title} - ${p.description} (${p.steps.length} pasos)`).join('\n');
+  const taskHistory = state.tasks.filter(t => t.completed).slice(-15).map(t => `- ${t.title}`).join('\n');
 
   return withRetry(async () => {
     try {
       const ai = getAI();
       return await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: [{ parts: [{ text: `USUARIO: ${state.userName}\nROLES DISPONIBLES: ${rolesContext}\n\nCONTEXTO:\n${historyText}\n\nMENSAJE DE ${state.userName}: "${message}"` }] }],
+        contents: [{ parts: [{ text: `USUARIO: ${state.userName}
+ROLES DISPONIBLES: ${rolesContext}
+
+CONOCIMIENTO HISTÓRICO PROYECTOS:
+${projectHistory}
+
+TAREAS COMPLETADAS RECIENTEMENTE:
+${taskHistory}
+
+CONTEXTO CHAT:
+${historyText}
+
+MENSAJE DE ${state.userName}: "${message}"` }] }],
         config: { 
           systemInstruction: getSystemInstruction(state.coachMode, state.userName),
           temperature: 0.8,
@@ -121,9 +130,9 @@ export async function breakdownProject(project: Project) {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: [{ parts: [{ text: `Desglosa este proyecto estratégicamente: ${project.title}. Objetivo: ${project.description}` }] }],
+        contents: [{ parts: [{ text: `Desglosa este proyecto del área ${project.area}: ${project.title}. Objetivo: ${project.description}` }] }],
         config: { 
-          systemInstruction: "Eres un gestor de proyectos experto. Desglosa en pasos SMART.",
+          systemInstruction: `Eres un gestor de proyectos experto especializado en ${project.area}. Desglosa en pasos SMART.`,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -152,15 +161,15 @@ export async function breakdownProject(project: Project) {
   });
 }
 
-export async function improveProjectObjective(title: string, description: string, roleName: string) {
+export async function improveProjectObjective(title: string, description: string, roleName: string, area: BusinessArea) {
     return withRetry(async () => {
       try {
         const ai = getAI();
         const response = await ai.models.generateContent({
           model: 'gemini-3-flash-preview',
-          contents: [{ parts: [{ text: `Refina este objetivo para el rol "${roleName}". Título: "${title}". Descripción: "${description}".` }] }],
+          contents: [{ parts: [{ text: `Refina este objetivo para el rol "${roleName}" en el área de "${area}". Título: "${title}". Descripción: "${description}".` }] }],
           config: { 
-              systemInstruction: `Crea objetivos potentes.`,
+              systemInstruction: `Crea objetivos potentes y estratégicos específicos para el área de negocio indicada.`,
               responseMimeType: "application/json",
               responseSchema: {
                   type: Type.OBJECT,

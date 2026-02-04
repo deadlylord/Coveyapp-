@@ -11,6 +11,8 @@ export type Role = {
 
 export type Quadrant = 'I' | 'II' | 'III' | 'IV';
 
+export type BusinessArea = 'FINANCE' | 'MARKETING' | 'ACCOUNTING' | 'OPERATIONS' | 'SALES' | 'GENERAL';
+
 export type Task = {
   id: string;
   title: string;
@@ -42,6 +44,7 @@ export type Project = {
   id: string;
   title: string;
   roleId: string;
+  area: BusinessArea;
   description: string;
   targetSessions: number;
   completedSessions: number;

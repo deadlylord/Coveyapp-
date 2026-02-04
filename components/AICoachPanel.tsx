@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { AppState, CoachMode, Task, Project, Quadrant, ChatMessage } from '../types';
 import { getCoachResponse } from '../geminiService';
@@ -113,11 +112,13 @@ const AICoachPanel: React.FC<AICoachPanelProps> = ({
 
     if (action.name === 'crear_proyecto') {
       const args = action.args as any;
+      // Fixed: Added missing 'area' property to conform to Project type required by onAddProject.
       const newProject: Project = {
         id: 'ai_proj_' + Date.now(),
         title: args.title,
         description: args.description,
         roleId: args.roleId || state.roles[0]?.id,
+        area: args.area || 'GENERAL',
         targetSessions: 10,
         completedSessions: 0,
         steps: [],

@@ -75,8 +75,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, setView, onOpenCo
         {children}
       </main>
 
-      {/* Futuristic Navigation Bar */}
-      <nav className="fixed bottom-8 left-6 right-6 z-50">
+      {/* Futuristic Navigation Bar - Increased Z-Index to 110 */}
+      <nav className="fixed bottom-8 left-6 right-6 z-[110]">
           <div className="bg-[#131B2E] border border-white/10 rounded-[32px] p-2 flex justify-between items-center shadow-[0_20px_60px_rgba(0,0,0,0.8)]">
             <BottomNavItem 
                 active={activeView === 'PLANNER'} 
