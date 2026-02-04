@@ -35,7 +35,7 @@ const INITIAL_STATE: AppState = {
   notificationsEnabled: false,
   emailRelayEnabled: false,
   emailRelayAddress: "",
-  version: 8.8
+  version: 8.9
 };
 
 const App: React.FC = () => {

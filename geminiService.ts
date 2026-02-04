@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
+import { GoogleGenAI, Type, FunctionDeclaration, Modality } from "@google/genai";
 import { AppState, Project, CoachMode, Task, Quadrant, BusinessArea } from "./types";
 
 const getAI = () => {
@@ -56,7 +56,7 @@ const createProjectTool: FunctionDeclaration = {
 };
 
 const getSystemInstruction = (mode: CoachMode, userName: string) => {
-  const base = `Eres Core Assist (V8.8 NEURAL ARCHITECT). Tu misión es ser el aliado estratégico personal de ${userName}.`;
+  const base = `Eres Core Assist (V8.9 NEURAL ARCHITECT). Tu misión es ser el aliado estratégico personal de ${userName}.`;
   
   const modes: Record<CoachMode, string> = {
     STRATEGIST: `${base} Modo: Arquitecto Central. Ayuda a ${userName} a ver el panorama completo y priorizar lo que realmente mueve la aguja. Analiza cada ángulo antes de actuar.`,
@@ -70,13 +70,12 @@ const getSystemInstruction = (mode: CoachMode, userName: string) => {
 
   return `${modeInstruction}
 
-DIRECTIVAS DE INTERACCIÓN CRÍTICAS (PROTOCOLO V8.8):
+DIRECTIVAS DE INTERACCIÓN CRÍTICAS (PROTOCOLO V8.9):
 1. **ANÁLISIS EXHAUSTIVO**: Tus respuestas deben ser ricas en contenido, estratégicas y pedagógicas. No te limites a respuestas cortas. Explica el "por qué" detrás de tus sugerencias.
-2. **PROTOCOLO SOCRÁTICO**: Si el usuario pide algo vago (ej: "ayúdame con marketing"), NO uses las herramientas de creación inmediatamente. En su lugar, realiza preguntas inteligentes para definir el Rol, el Área, el objetivo SMART y el impacto esperado.
-3. **CURADORÍA DE ACCIONES**: Solo propón el uso de herramientas de creación (\`crear_tarea\`, \`crear_proyecto\`) cuando tengas claridad absoluta. Si falta información, PRIORIZA EL DIÁLOGO.
-4. **HISTORIAL Y CONTEXTO**: Tienes acceso a todos los proyectos. Si el usuario menciona un tema, revisa cómo afecta a cada área y cita proyectos previos si son relevantes.
-5. **VISIÓN INTEGRAL**: Considera el impacto cruzado (ej: cómo una campaña de marketing afecta el flujo de caja en finanzas).
-6. **TONO HUMANO**: Empático, profesional, cálido y extremadamente inteligente.`;
+2. **PROTOCOLO SOCRÁTICO**: Si el usuario pide algo vago, NO uses las herramientas de creación inmediatamente. Realiza preguntas inteligentes para definir el Rol, el Área y el impacto.
+3. **Voz Neural**: Tus palabras serán escuchadas. Mantén un discurso claro, inspirador y profesional.
+4. **HISTORIAL Y CONTEXTO**: Tienes acceso a todos los proyectos para realizar análisis cruzados.
+5. **TONO HUMANO**: Empático, profesional y extremadamente inteligente.`;
 };
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
@@ -93,9 +92,7 @@ export async function getCoachResponse(message: string, state: AppState) {
   const currentHistory = state.coachMessages[state.coachMode] || [];
   const historyText = currentHistory.map(m => `${m.role === 'user' ? 'Usuario' : 'Core'}: ${m.text}`).join('\n');
   const rolesContext = state.roles.map(r => `ID: ${r.id}, Nombre: ${r.name}`).join(' | ');
-  
-  // Historical context of projects and tasks
-  const projectHistory = state.projects.map(p => `PROYECTO [${p.area}]: ${p.title} - ${p.description} (${p.steps.length} pasos)`).join('\n');
+  const projectHistory = state.projects.map(p => `PROYECTO [${p.area}]: ${p.title} - ${p.description}`).join('\n');
   const taskHistory = state.tasks.filter(t => t.completed).slice(-15).map(t => `- ${t.title}`).join('\n');
 
   return withRetry(async () => {
@@ -105,19 +102,11 @@ export async function getCoachResponse(message: string, state: AppState) {
         model: 'gemini-3-flash-preview',
         contents: [{ parts: [{ text: `USUARIO: ${state.userName}
 ROLES DISPONIBLES: ${rolesContext}
-
-CONOCIMIENTO HISTÓRICO PROYECTOS:
-${projectHistory}
-
-TAREAS COMPLETADAS RECIENTEMENTE:
-${taskHistory}
-
-CONTEXTO CHAT:
-${historyText}
-
+HISTORIAL PROYECTOS: ${projectHistory}
+TAREAS RECIENTES: ${taskHistory}
+CONTEXTO CHAT: ${historyText}
 MENSAJE DE ${state.userName}: "${message}"
-
-INSTRUCCIÓN ADICIONAL: Genera una respuesta detallada y estratégica. Si necesitas más datos para ser preciso, pregunta antes de sugerir acciones.` }] }],
+INSTRUCCIÓN: Respuesta detallada. Pregunta antes de actuar si hay dudas.` }] }],
         config: { 
           systemInstruction: getSystemInstruction(state.coachMode, state.userName),
           temperature: 0.85,
@@ -128,15 +117,42 @@ INSTRUCCIÓN ADICIONAL: Genera una respuesta detallada y estratégica. Si necesi
   });
 }
 
+/**
+ * Generates audio speech for a given text response.
+ */
+export async function generateCoachVoice(text: string, voiceName: string = 'Kore') {
+  return withRetry(async () => {
+    try {
+      const ai = getAI();
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName },
+            },
+          },
+        },
+      });
+      return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    } catch (error: any) {
+      console.error("Neural Voice Error:", error);
+      throw error;
+    }
+  });
+}
+
 export async function breakdownProject(project: Project) {
   return withRetry(async () => {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: [{ parts: [{ text: `Desglosa este proyecto del área ${project.area}: ${project.title}. Objetivo: ${project.description}` }] }],
+        contents: [{ parts: [{ text: `Desglosa este proyecto: ${project.title}.` }] }],
         config: { 
-          systemInstruction: `Eres un gestor de proyectos experto especializado en ${project.area}. Desglosa en pasos SMART.`,
+          systemInstruction: `Gestor de proyectos experto en ${project.area}.`,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -171,9 +187,9 @@ export async function improveProjectObjective(title: string, description: string
         const ai = getAI();
         const response = await ai.models.generateContent({
           model: 'gemini-3-flash-preview',
-          contents: [{ parts: [{ text: `Refina este objetivo para el rol "${roleName}" en el área de "${area}". Título: "${title}". Descripción: "${description}".` }] }],
+          contents: [{ parts: [{ text: `Refina objetivo: ${title}` }] }],
           config: { 
-              systemInstruction: `Crea objetivos potentes y estratégicos específicos para el área de negocio indicada.`,
+              systemInstruction: `Experto en objetivos estratégicos.`,
               responseMimeType: "application/json",
               responseSchema: {
                   type: Type.OBJECT,
@@ -186,29 +202,21 @@ export async function improveProjectObjective(title: string, description: string
           }
         });
         return extractJSON(response.text || '{}');
-      } catch (error) { 
-          return { title, description }; 
-      }
+      } catch (error) { return { title, description }; }
     });
 }
 
 export async function generateEmailBriefing(state: AppState) {
-  const pendingBigRocks = state.tasks
-    .filter(t => !t.completed && t.isBigRock)
-    .map(t => `- ${t.title} (${t.time || 'Bloque'})`)
-    .join('\n');
-
+  const pendingBigRocks = state.tasks.filter(t => !t.completed && t.isBigRock).map(t => `- ${t.title}`).join('\n');
   return withRetry(async () => {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: [{ parts: [{ text: `Genera un Briefing de impacto para ${state.userName}. Misión: ${state.mission.text}. Tareas: ${pendingBigRocks}` }] }],
-        config: { systemInstruction: `Asistente de elite para ${state.userName}. Tono cercano y motivador.` }
+        contents: [{ parts: [{ text: `Genera briefing.` }] }],
+        config: { systemInstruction: `Tono motivador.` }
       });
       return response.text;
-    } catch (error) {
-      return `Sincronía de Core Assist activa para ${state.userName}.`;
-    }
+    } catch (error) { return `Sync activo.`; }
   });
 }
